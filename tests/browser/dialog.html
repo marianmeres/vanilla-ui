@@ -1,0 +1,199 @@
+<!doctype html>
+<!--
+	Browser test for components/dialog.html — run by `deno task test:browser`
+	(scripts/browser-test.ts drives headless Chrome and reads #result).
+
+	Contract: one line per check — `ok <name>` / `FAIL <name> (detail)` — and a
+	final `DONE` (or `ERROR …` on an uncaught exception).
+-->
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<title>dialog · browser test</title>
+		<link rel="icon" href="data:," />
+		<script type="importmap">
+		{
+			"imports": {
+				"@marianmeres/vanilla": "../../dist/mod.js",
+				"@marianmeres/vanilla-ui": "../../dist/mod.js"
+			}
+		}
+		</script>
+	</head>
+	<body>
+		<pre id="result"></pre>
+
+		<!-- a nested child component whose action is ALSO named "close" -->
+		<template id="tpl-child">
+			<div data-scope="child"><button data-on="click:close">x</button></div>
+		</template>
+
+		<script type="module">
+		import { createView, delegate, fromTemplate, loadAll } from "@marianmeres/vanilla-ui";
+
+		const out = [];
+		const check = (name, cond, detail = "") =>
+			out.push(cond ? `ok ${name}` : `FAIL ${name}${detail ? ` (${detail})` : ""}`);
+		const flush = () => (document.getElementById("result").textContent = out.join("\n"));
+		// the native `close` event is async — wait for it, never guess with a timer
+		const closed = (d) =>
+			new Promise((r) =>
+				d.el.addEventListener("close", () => setTimeout(r, 0), { once: true })
+			);
+
+		try {
+			const { createDialog } = await loadAll();
+			check("styles adopted", !!document.querySelector("style[data-vanilla-src]"));
+			check("template adopted", !!document.getElementById("tpl-vui-dialog"));
+
+			/* ---- open, chrome, slots ---------------------------------------- */
+			const seen = [];
+			const dlg = createDialog({
+				title: "T",
+				body: "B",
+				footer: "F",
+				onClose: (v) => seen.push("cb:" + v),
+			});
+			dlg.el.addEventListener("vui:close", (e) => seen.push("ev:" + e.detail.returnValue));
+			document.body.append(dlg.el);
+			dlg.open();
+			check("open(): el.open", dlg.el.open);
+			check("open(): isOpen", dlg.isOpen.get() === true);
+			check("title bound", dlg.el.querySelector(".vui-dialog__title").textContent === "T");
+			check(
+				"body text slot",
+				dlg.el.querySelector(".vui-dialog__body").textContent === "B",
+			);
+			check(
+				"footer shown when given",
+				dlg.el.querySelector(".vui-dialog__footer").hidden === false,
+			);
+			check(
+				"aria-labelledby",
+				dlg.el.getAttribute("aria-labelledby") ===
+					dlg.el.querySelector(".vui-dialog__title").id,
+			);
+			check("data-scope on root", dlg.el.dataset.scope === "dialog");
+
+			/* ---- every way to close -> one close, right returnValue ---------- */
+			let w = closed(dlg);
+			dlg.el.querySelector(".vui-dialog__close").click();
+			check("✕: el.open false synchronously", !dlg.el.open);
+			check("✕: isOpen false synchronously", dlg.isOpen.get() === false);
+			await w;
+			check(
+				"✕ -> 'close' (callback + event)",
+				seen.join() === "cb:close,ev:close",
+				seen.join(),
+			);
+
+			seen.length = 0;
+			dlg.open();
+			w = closed(dlg);
+			dlg.close("custom");
+			await w;
+			check("close('custom')", seen.join() === "cb:custom,ev:custom", seen.join());
+
+			seen.length = 0;
+			dlg.open();
+			w = closed(dlg);
+			dlg.el.dispatchEvent(new MouseEvent("click", { bubbles: true })); // target === <dialog>
+			await w;
+			check(
+				"backdrop click -> 'backdrop'",
+				seen.join() === "cb:backdrop,ev:backdrop",
+				seen.join(),
+			);
+
+			seen.length = 0;
+			dlg.open();
+			w = closed(dlg);
+			dlg.el.dispatchEvent(new Event("cancel")); // Esc: cancel, then native close
+			dlg.el.close();
+			await w;
+			check(
+				"Esc (cancel event) -> 'cancel'",
+				seen.join() === "cb:cancel,ev:cancel",
+				seen.join(),
+			);
+
+			seen.length = 0;
+			dlg.open();
+			w = closed(dlg);
+			dlg.el.close(); // Esc without a cancel event: must not inherit a stale value
+			await w;
+			check(
+				"close with no value -> 'cancel', never stale",
+				seen.join() === "cb:cancel,ev:cancel",
+				seen.join(),
+			);
+
+			seen.length = 0;
+			dlg.open();
+			dlg.el.querySelector(".vui-dialog__panel").click();
+			await new Promise((r) => setTimeout(r, 30));
+			check("click inside the panel does not close", dlg.el.open && seen.length === 0);
+			w = closed(dlg);
+			dlg.close();
+			await w;
+
+			/* ---- options ------------------------------------------------------ */
+			const noBackdrop = createDialog({ title: "x", closeOnBackdrop: false });
+			document.body.append(noBackdrop.el);
+			noBackdrop.open();
+			noBackdrop.el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+			await new Promise((r) => setTimeout(r, 30));
+			check("closeOnBackdrop:false keeps it open", noBackdrop.el.open);
+			noBackdrop.destroy();
+
+			const bare = createDialog({ closeButton: false });
+			document.body.append(bare.el);
+			check(
+				"no title + no ✕ -> header hidden",
+				bare.el.querySelector(".vui-dialog__header").hidden,
+			);
+			check(
+				"footer hidden when omitted",
+				bare.el.querySelector(".vui-dialog__footer").hidden,
+			);
+			bare.destroy();
+
+			const nonModal = createDialog({ title: "nm", modal: false });
+			document.body.append(nonModal.el);
+			nonModal.open();
+			check("modal:false uses show()", nonModal.el.open && !nonModal.el.matches(":modal"));
+			nonModal.destroy();
+
+			/* ---- element + view slots, nesting, destroy cascade -------------- */
+			const node = document.createElement("p");
+			node.textContent = "E";
+			const withEl = createDialog({ body: node });
+			check("body element slot", withEl.el.querySelector(".vui-dialog__body p") === node);
+			withEl.destroy();
+
+			const child = createView((track) => {
+				const el = fromTemplate("tpl-child");
+				let hits = 0;
+				track(delegate(el, { close: () => hits++ }));
+				return { el, hits: () => hits };
+			});
+			const d2 = createDialog({ body: child });
+			document.body.append(d2.el);
+			d2.open();
+			child.el.querySelector("button").click();
+			await new Promise((r) => setTimeout(r, 30));
+			check("nested data-scope: child 'close' does not close the dialog", d2.el.open);
+			check("nested data-scope: child's own delegate fired", child.hits() === 1);
+			d2.destroy();
+			check("destroy(): root removed", !d2.el.isConnected);
+			check("destroy(): mounted child view removed too", !child.el.isConnected);
+			check("destroy(): isOpen false", d2.isOpen.get() === false);
+
+			out.push("DONE");
+		} catch (e) {
+			out.push("ERROR " + (e && e.stack || e));
+		}
+		flush();
+		</script>
+	</body>
+</html>

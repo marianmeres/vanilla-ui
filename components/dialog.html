@@ -1,0 +1,287 @@
+<!--
+	vui · dialog — a modal (or non-modal) dialog on the native <dialog> element.
+
+	SINGLE-FILE COMPONENT: markup (<template>), styling (<style>, @scope'd) and
+	logic (inline <script type="module">) in one file. Load it with
+	loadComponent() (or the typed loadDialog() / loadAll() from the index).
+
+	The platform does the heavy lifting: showModal() gives the top layer, the
+	backdrop, the focus trap, Esc-to-close and focus restore on close. This file
+	adds only the chrome (header / body / footer slots), the return-value
+	convention, and the events out.
+
+	Props (all optional):
+	  title           string        heading text
+	  body            Slot          text | HTMLElement | view — the content
+	  footer          Slot          text | HTMLElement | view — usually buttons
+	  modal           boolean       true → showModal(), false → show()   [true]
+	  closeOnBackdrop boolean       click outside the panel closes         [true]
+	  closeButton     boolean       render the ✕ in the header             [true]
+	  onClose         (returnValue) callback up, once per close
+
+	Returns a view: { el, isOpen, open(), close(returnValue?), destroy() }
+
+	Events out (CustomEvent on `el`, bubbling):
+	  "vui:close"  detail: { returnValue }   — after the native close
+
+	returnValue convention: "close" (✕ / close()), "cancel" (Esc), "backdrop",
+	or the `value` of the <form method="dialog"> submit button that closed it.
+
+	Imports the library by BARE specifier — loadComponent() runs this module
+	from a blob: URL, which resolves only through the host's import map.
+-->
+<template id="tpl-vui-dialog">
+	<dialog
+		class="vui-dialog"
+		data-scope="dialog"
+		data-on="click:backdrop; cancel:cancel; close:closed"
+	>
+		<div class="vui-dialog__panel">
+			<header class="vui-dialog__header" data-ref="header">
+				<h2
+					class="vui-dialog__title"
+					data-ref="title"
+					data-bind="text:title"
+				></h2>
+				<button
+					type="button"
+					class="vui-dialog__close"
+					data-ref="closeButton"
+					data-on="click:close"
+					aria-label="Close"
+				>
+					&#x2715;
+				</button>
+			</header>
+			<div class="vui-dialog__body" data-ref="body"></div>
+			<footer
+				class="vui-dialog__footer"
+				data-ref="footer"
+				hidden
+			></footer>
+		</div>
+	</dialog>
+</template>
+
+<!--
+	Styles are adopted into <head> verbatim (global cascade) and encapsulated by
+	native CSS @scope against the root class. Colors read the design-tokens
+	variables (prefix "vui-") and fall back to system colors, so the dialog looks
+	right with a theme AND without one (and follows `color-scheme` on its own).
+-->
+<style>
+	@scope (.vui-dialog) {
+		:scope {
+			--_bg: var(--vui-color-surface, Canvas);
+			--_fg: var(--vui-color-surface-foreground, CanvasText);
+			--_muted: var(--vui-color-muted-foreground, GrayText);
+			--_border: var(
+				--vui-color-surface-1,
+				color-mix(in srgb, CanvasText 15%, transparent)
+			);
+			--_ring: var(--vui-color-ring, Highlight);
+			--_radius: var(--vui-radius, 0.5rem);
+
+			/* reset the UA dialog box, then draw our own */
+			margin: auto;
+			padding: 0;
+			border: 1px solid var(--_border);
+			border-radius: var(--_radius);
+			background: var(--_bg);
+			color: var(--_fg);
+			width: min(32rem, calc(100vw - 2rem));
+			max-height: calc(100dvh - 2rem);
+			box-shadow: 0 12px 32px -16px rgb(0 0 0 / 0.45);
+			overflow: hidden; /* the body scrolls, not the dialog */
+		}
+		:scope::backdrop {
+			background: rgb(0 0 0 / 0.45);
+			backdrop-filter: blur(2px);
+		}
+		:scope [hidden] {
+			display: none;
+		}
+
+		.vui-dialog__panel {
+			display: flex;
+			flex-direction: column;
+			max-height: calc(100dvh - 2rem);
+		}
+		.vui-dialog__header {
+			display: flex;
+			align-items: center;
+			gap: 1rem;
+			padding: 0.75rem 1.25rem;
+			border-bottom: 1px solid var(--_border);
+		}
+		.vui-dialog__title {
+			flex: 1;
+			margin: 0;
+			font-size: 1.125rem;
+			font-weight: 600;
+			line-height: 1.3;
+		}
+		.vui-dialog__close {
+			all: unset;
+			cursor: pointer;
+			display: grid;
+			place-items: center;
+			width: 2rem;
+			height: 2rem;
+			border-radius: 50%;
+			color: var(--_muted);
+			font-size: 1.25rem;
+			line-height: 1;
+			margin-right: -0.5rem;
+		}
+		.vui-dialog__close:hover {
+			color: var(--_fg);
+			background: color-mix(in srgb, currentColor 10%, transparent);
+		}
+		.vui-dialog__close:focus-visible {
+			outline: 2px solid var(--_ring);
+			outline-offset: 1px;
+		}
+		.vui-dialog__body {
+			padding: 1.25rem;
+			overflow: auto;
+			line-height: 1.5;
+		}
+		.vui-dialog__footer {
+			display: flex;
+			justify-content: flex-end;
+			gap: 0.5rem;
+			padding: 0.75rem 1.25rem;
+			border-top: 1px solid var(--_border);
+		}
+
+		@media (prefers-reduced-motion: no-preference) {
+			:scope[open] {
+				animation: vui-dialog-in 0.16s ease-out;
+			}
+			:scope[open]::backdrop {
+				animation: vui-dialog-fade 0.16s ease-out;
+			}
+		}
+	}
+	@keyframes vui-dialog-in {
+		from {
+			opacity: 0;
+			transform: translateY(6px) scale(0.98);
+		}
+	}
+	@keyframes vui-dialog-fade {
+		from {
+			opacity: 0;
+		}
+	}
+</style>
+
+<script type="module">
+	import {
+		applyBindings,
+		createView,
+		delegate,
+		fromTemplate,
+		mount,
+		observable,
+		refs,
+	} from "@marianmeres/vanilla";
+
+	let seq = 0;
+
+	/** Fill a slot from a `Slot` value: text | element | view (mounted + tracked). */
+	function fill(track, slot, content) {
+		if (content == null) return;
+		if (typeof content === "string") slot.textContent = content;
+		else if (content instanceof Node) slot.replaceChildren(content);
+		else mount(track, slot, content);
+	}
+
+	export function createDialog({
+		title = "",
+		body,
+		footer,
+		modal = true,
+		closeOnBackdrop = true,
+		closeButton = true,
+		onClose,
+	} = {}) {
+		return createView((track) => {
+			const el = fromTemplate("tpl-vui-dialog");
+			const r = refs(el);
+			const isOpen = observable(false);
+			// destroy() removes the node; removal fires no native `close`, so settle
+			// the observable ourselves (no onClose — teardown is not a verdict).
+			track(() => isOpen.set(false));
+
+			// header: title + ✕ (either may go; both gone → no header at all)
+			applyBindings(el, { title });
+			r.title.id = `vui-dialog-title-${++seq}`;
+			el.setAttribute("aria-labelledby", r.title.id);
+			r.title.hidden = !title;
+			r.closeButton.hidden = !closeButton;
+			r.header.hidden = !title && !closeButton;
+
+			fill(track, r.body, body);
+			if (footer != null) {
+				fill(track, r.footer, footer);
+				r.footer.hidden = false;
+			}
+
+			const api = {
+				el,
+				isOpen,
+				open() {
+					if (el.open) return;
+					modal ? el.showModal() : el.show();
+					isOpen.set(true);
+				},
+				close(returnValue = "close") {
+					if (!el.open) return;
+					el.close(returnValue); // → native "close" event (async) → `closed`
+					isOpen.set(false); // mirror `el.open`, which is already false
+				},
+			};
+
+			// The root itself carries data-on for the dialog's own (non-bubbling)
+			// `cancel` / `close` events — delegate listens on the root, so it sees them.
+			track(
+				delegate(el, {
+					close: () => api.close("close"),
+					// only a click on the <dialog> itself is the backdrop — the panel
+					// fills the dialog, so any click on content targets the panel
+					backdrop: (e) => {
+						if (modal && closeOnBackdrop && e.target === el) {
+							api.close("backdrop");
+						}
+					},
+					// Esc: the browser fires `cancel`, then closes with returnValue
+					// untouched — so we stamp the reason here, before that happens.
+					cancel: () => {
+						el.returnValue = "cancel";
+					},
+					// Every way of closing — ✕, close(), Esc, backdrop, a
+					// <form method="dialog"> submit — ends in the native `close` event.
+					closed: () => {
+						// Read the verdict, then forget it: the native `close` event is
+						// async, so resetting here (not in open()) can never race a pending
+						// close — and a later Esc without a `cancel` event can't inherit it.
+						const returnValue = el.returnValue || "cancel";
+						el.returnValue = "";
+						isOpen.set(false);
+						onClose?.(returnValue);
+						el.dispatchEvent(
+							new CustomEvent("vui:close", {
+								bubbles: true,
+								detail: { returnValue },
+							}),
+						);
+					},
+				}),
+			);
+
+			return api;
+		});
+	}
+</script>

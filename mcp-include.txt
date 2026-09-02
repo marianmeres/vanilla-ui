@@ -1,0 +1,7 @@
+Reusable UI primitives on top of @marianmeres/vanilla, shipped as single-file .html components
+(a <template>, a CSS @scope'd <style>, and the factory in an inline module script) loaded at
+runtime with loadComponent — no build step, just serve. Every component root carries data-scope
+so components nest without ref/action collisions; styling reads @marianmeres/design-tokens
+variables (prefix "vui-") with system-color fallbacks; events go out as "vui:*" CustomEvents plus
+callback props. The typed index (src/mod.ts) re-exports vanilla, resolves component URLs from its
+own location, and exposes loadAll()/load<Name>(). First primitive: dialog on the native <dialog>.
