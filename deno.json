@@ -1,12 +1,20 @@
 {
 	"name": "@marianmeres/vanilla-ui",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"exports": "./src/mod.ts",
 	"compilerOptions": {
-		"lib": ["deno.ns", "dom", "dom.iterable", "esnext"]
+		"lib": [
+			"deno.ns",
+			"dom",
+			"dom.iterable",
+			"esnext"
+		]
 	},
 	"publish": {
-		"exclude": ["tmp", ".env.example"]
+		"exclude": [
+			"tmp",
+			".env.example"
+		]
 	},
 	"tasks": {
 		"test": "deno test --allow-read",
@@ -38,9 +46,16 @@
 		"lineWidth": 90,
 		"indentWidth": 4,
 		"proseWrap": "preserve",
-		"exclude": ["dist", "gallery/themes/*.css", "gallery/reboot.css"]
+		"exclude": [
+			"dist",
+			"gallery/themes/*.css",
+			"gallery/reboot.css"
+		]
 	},
 	"minimumDependencyAge": {
-		"exclude": ["jsr:@marianmeres/*", "npm:@marianmeres/*"]
+		"exclude": [
+			"jsr:@marianmeres/*",
+			"npm:@marianmeres/*"
+		]
 	}
 }
