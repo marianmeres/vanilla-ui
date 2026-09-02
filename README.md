@@ -111,6 +111,11 @@ to read. Alongside them sit the structural tokens: radius and shadow in three ti
 - **Tokens under another prefix already?** Regenerate with `"vui-"`, or set the handful of
   `--vui-*` names the kit reads (the whole vocabulary is one table in
   [API.md](./API.md#the-vocabulary)) on `:root` yourself.
+- **Bootstrap Reboot on the page?** Generate through the design-tokens **reboot bridge**
+  (`generateThemedCss`, as `gallery/themes/_generate.ts` does): the `--bs-*` variables come out
+  alongside the `--vui-color-*` ones, from the same theme, so Reboot follows your theme and your
+  `:root.dark`. The tokens never collide — but the **stylesheet** needs a layer, see
+  [Controls](#controls) below.
 
 No Tailwind, no utility classes in templates — the kit never assumes a page-level CSS framework.
 
@@ -140,8 +145,13 @@ the same channel (`--vui-control-min-height`, `-py`, `-px`), so a dense toolbar 
 controls the same way.
 
 Everything the kit defines lives in the `vui.base` / `vui.components` **cascade layers**, so
-your own unlayered CSS overrides any of it without `!important` or a specificity fight. See
-[API.md → Base layer](./API.md#base-layer).
+your own unlayered CSS overrides any of it without `!important` or a specificity fight. The
+corollary: a **reset** is unlayered CSS too. If your page loads one — Bootstrap Reboot, say,
+the usual companion of the design-tokens reboot bridge — import it into a layer of its own
+(`@layer reset, vui.base, vui.components;` then `@import url("reboot.css") layer(reset);`) or it
+beats the kit and squares every button. See
+[API.md → Base layer](./API.md#base-layer), and flip the **reboot** picker in the gallery to see
+both outcomes.
 
 ## Nesting
 

@@ -154,6 +154,44 @@ button {
 } /* wins over .vui-btn */
 ```
 
+### With a reset on the page (Bootstrap Reboot)
+
+That same rule cuts the other way: a **reset** is unlayered CSS too, so it also beats the kit.
+[Bootstrap Reboot](https://getbootstrap.com/docs/5.3/content/reboot/) — the usual companion of
+the `@marianmeres/design-tokens` [reboot bridge](https://jsr.io/@marianmeres/design-tokens/doc/reboot/~)
+— loaded plainly will square every `.vui-btn` (`button { border-radius: 0 }`), push controls off
+their shared height (`line-height: inherit` over the kit's `1.25`, which a `<select>` ignores),
+turn a `.vui-btn` on a `<summary>` back into a `list-item`, and make `.vui-field > label`
+`inline-block`. Nothing here is the kit losing an argument it should win — it is the escape
+hatch above, used by accident.
+
+**Put the reset in a layer.** Name the layer before anything loads, so its position is fixed
+below the kit's, then import into it:
+
+```html
+<style>
+@layer reset, vui.base, vui.components;
+</style>
+<style>
+@import url("./reboot.css") layer(reset);
+</style>
+```
+
+Order matters, not the name: a layer takes its place the first time it is mentioned, so the
+`@layer reset, vui.base, vui.components` statement must come **before** `base.css` (which
+declares its own two) or the reset lands last and wins anyway.
+
+**The tokens are friendlier.** The bridge emits `--bs-*` alongside `--vui-color-*` from the same
+theme — two vocabularies, no collision — and generating your theme through it
+(`generateThemedCss` rather than `generateThemeCss`) is what makes Reboot follow your theme and
+your dark class instead of painting Bootstrap's own white page. One ordering catch, and only
+while Reboot is unlayered: `reboot.css` redeclares every `--bs-*` on `:root` itself, so it must
+load **before** the theme or it overwrites the bridge. In a layer that stops mattering — the
+theme's unlayered custom properties win from anywhere.
+
+The gallery does all of this: its theme files carry the bridge, and the **reboot** picker
+switches between off / `layer(reset)` / unlayered so the difference is visible.
+
 ### The vocabulary
 
 Every design token the kit reads is resolved here once, with a system-color fallback, so a page

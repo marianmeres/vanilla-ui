@@ -21,7 +21,8 @@ components/base.css       — the base layer: token vocabulary + control primiti
 components/<name>.html    — ONE component per file: <template> + @scope'd <style> + inline module
 dist/mod.js               — built index (deno task build); tracked; import-map target
 gallery/index.html        — every component, every state, every theme; import map example
-gallery/themes/           — generated design-tokens CSS (prefix "vui-"); _generate.ts
+gallery/themes/           — generated design-tokens CSS + reboot bridge ("vui-"); _generate.ts
+gallery/reboot.css        — Bootstrap Reboot, vendored; the picker imports it into @layer reset
 tests/components.test.ts  — anatomy lint of every components/*.html (linkedom, no browser)
 tests/mod.test.ts         — index: URL resolution, re-exports
 tests/browser/<name>.html — behavior test page per component (real Chrome, via scripts/browser-test.ts)
@@ -75,7 +76,11 @@ README.md · API.md        — human docs
    control — a `:root` declaration would substitute eagerly and ignore the container); the lint
    enforces that too. Every component `<style>` is wrapped in `@layer vui.components` so a
    consumer's unlayered CSS wins without a specificity fight. `button(text, opts)` in the index
-   builds one in JS; it returns an element, not a view.
+   builds one in JS; it returns an element, not a view. The corollary a host must know: a
+   **reset** is unlayered CSS too, so Bootstrap Reboot loaded plainly beats `vui.base` — it
+   belongs in a layer of its own, declared before `base.css` (`@layer reset, vui.base,
+   vui.components;` + `@import url("reboot.css") layer(reset);`). The gallery's reboot
+   picker shows both outcomes; API.md → Base layer documents it.
 10. **One copy of vanilla.** `src/mod.ts` re-exports the base library so a host maps both bare
     specifiers to `dist/mod.js`. Don't import vanilla from anywhere but that specifier.
 
@@ -122,6 +127,6 @@ README.md · API.md        — human docs
 - [README.md](./README.md) — overview, usage, theming, gallery.
 - [API.md](./API.md) — loaders, per-component props / view / events / CSS variables.
 - [gallery/index.html](./gallery/index.html) — worked host page (import map, theme switching,
-  nested component).
+  nested component, the reboot / layer picker).
 - Base library: `/Users/mm/projects/@marianmeres/vanilla/docs/DESIGN.md` (local) ·
   [jsr.io/@marianmeres/vanilla](https://jsr.io/@marianmeres/vanilla).
