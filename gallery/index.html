@@ -450,9 +450,128 @@
 				</div>
 				<pre class="log" data-ref="log"></pre>
 			</section>
+
+			<!-- =============================================================== popover -->
+			<section class="component" id="popover">
+				<h2>popover · menu</h2>
+				<p>
+					The native Popover API: top layer, light dismiss (click
+					outside, Esc), one auto popover at a time — and nesting.
+					CSS Anchor Positioning places it and flips it when it would
+					overflow; a browser without it gets the same placement from
+					a few lines of JS. A <code>&lt;button&gt;</code> anchor is
+					the native <em>invoker</em>, so the platform toggles it.
+					<code>role: "menu"</code> adds the menu glue: focus, ↑ ↓
+					Home End, Tab, <code>vui:select</code> — and the items are
+					bare <code>&lt;button role="menuitem"&gt;</code>s, painted
+					by the base layer for that role alone.
+				</p>
+				<div class="vui-row" style="margin-bottom: 1rem">
+					<button
+						type="button"
+						class="vui-btn vui-btn--primary"
+						data-ref="menuBtn"
+					>
+						menu ▾
+					</button>
+					<button type="button" class="vui-btn" data-ref="textBtn">
+						popover (text)
+					</button>
+					<button type="button" class="vui-btn" data-ref="formBtn">
+						form inside
+					</button>
+					<button type="button" class="vui-btn" data-ref="outerBtn">
+						nested (a menu in a popover)
+					</button>
+					<button
+						type="button"
+						class="vui-btn"
+						data-on="click:inDialog"
+					>
+						inside a dialog
+					</button>
+				</div>
+				<p style="margin: 0 0 0.5rem; font-size: 0.925rem">
+					Placement is the <em>preferred</em> side. Scroll so an
+					anchor nears an edge and watch it flip:
+				</p>
+				<div
+					class="vui-row"
+					data-ref="placements"
+					style="margin-bottom: 1rem"
+				></div>
+				<pre class="log" data-ref="log"></pre>
+			</section>
 		</div>
 
 		<!-- ------------------------------------------------ gallery-only templates -->
+
+		<!-- a menu for the popover: NOT ONE control class — the items are painted
+		     by the base layer because of their role, and the popover's surface
+		     gives them their hover. Only the emphasis on Delete is a choice. -->
+		<template id="tpl-gallery-menu">
+			<div class="vui-menu">
+				<button type="button" role="menuitem" value="rename">
+					Rename <kbd>F2</kbd>
+				</button>
+				<button type="button" role="menuitem" value="duplicate">
+					Duplicate <kbd>⌘D</kbd>
+				</button>
+				<button type="button" role="menuitem" value="move">
+					Move to…
+				</button>
+				<button type="button" role="menuitem" value="archive" disabled>
+					Archive
+				</button>
+				<hr />
+				<button
+					type="button"
+					role="menuitem"
+					value="delete"
+					class="vui-menuitem--destructive"
+				>
+					Delete <kbd>⌫</kbd>
+				</button>
+			</div>
+		</template>
+
+		<!-- a form in a popover: bare controls again, lifted by the popover's
+		     surface exactly as they are by the dialog panel. `autofocus` is the
+		     platform's — the popover focusing steps honor it on open. -->
+		<template id="tpl-gallery-popover-form">
+			<form style="width: 18rem">
+				<div class="vui-field">
+					<label for="g-email">Email</label>
+					<input
+						id="g-email"
+						name="email"
+						type="email"
+						autofocus
+						placeholder="ada@example.com"
+					/>
+				</div>
+				<div class="vui-row" style="justify-content: flex-end">
+					<button type="button" data-ref="cancel">Cancel</button>
+					<button type="submit" class="vui-btn--primary">
+						Subscribe
+					</button>
+				</div>
+			</form>
+		</template>
+
+		<!-- the outer popover of the nested demo: some text and a button that
+		     anchors a menu. Opening the menu keeps this one open — a popover
+		     invoked from inside another is nested, natively. -->
+		<template id="tpl-gallery-popover-outer">
+			<div style="max-width: 16rem">
+				<p style="margin: 0 0 0.75rem">
+					This popover holds a button that opens a menu. The menu is
+					<em>nested</em>: it does not dismiss this one, and Esc
+					closes them one at a time.
+				</p>
+				<button type="button" data-ref="inner">actions ▾</button>
+			</div>
+		</template>
 
 		<!-- dialog body for the "form" demo: <form method="dialog"> closes the dialog
 		     with the submit button's value as returnValue — pure platform. -->
@@ -684,6 +803,117 @@
 								title: "Scrolling body",
 								body: node,
 							});
+						},
+					}),
+				);
+			});
+
+			/* ---- popover section ------------------------------------------------ */
+			enhance("#popover", (el, track) => {
+				const r = refs(el);
+				const log = (line) => {
+					r.log.textContent += (r.log.textContent ? "\n" : "") + line;
+					r.log.scrollTop = r.log.scrollHeight;
+				};
+
+				// Popovers are created ONCE and toggled by their anchors: the
+				// factory inserts `el` right after the anchor, and a <button>
+				// anchor is the native invoker, so nothing else is wired here.
+				const pop = (label, props) => {
+					const p = ui.createPopover({
+						...props,
+						onOpen: () => log(`${label} → vui:open`),
+						onClose: () => log(`${label} → vui:close`),
+						onSelect: (value) => log(`${label} → vui:select "${value}"`),
+					});
+					track(() => p.destroy());
+					return p;
+				};
+
+				pop("menu", {
+					anchor: r.menuBtn,
+					role: "menu",
+					body: fromTemplate("tpl-gallery-menu"),
+				});
+
+				pop("text", {
+					anchor: r.textBtn,
+					body: "Plain text. Click outside, or press Esc, to dismiss.",
+				});
+
+				// a form: bare controls lifted by the surface. Submit and cancel
+				// are wired by hand — the popover is a scope of its own, so this
+				// section's delegate would not see a data-on inside it.
+				const form = fromTemplate("tpl-gallery-popover-form");
+				const formPop = pop("form", {
+					anchor: r.formBtn,
+					body: form,
+					placement: "bottom-end",
+				});
+				form.addEventListener("submit", (e) => {
+					e.preventDefault();
+					const data = Object.fromEntries(new FormData(form));
+					log(`form → submit ${JSON.stringify(data)}`);
+					form.reset();
+					formPop.close();
+				});
+				refs(form).cancel.addEventListener("click", () => formPop.close());
+
+				// nested: the inner menu's anchor lives inside the outer popover
+				const outer = fromTemplate("tpl-gallery-popover-outer");
+				pop("outer", { anchor: r.outerBtn, body: outer, placement: "bottom" });
+				pop("inner", {
+					anchor: refs(outer).inner,
+					role: "menu",
+					body: fromTemplate("tpl-gallery-menu"),
+				});
+
+				// every placement on a button() each — the same text, the same
+				// anchor, only the preferred side differs
+				for (
+					const placement of [
+						"bottom-start",
+						"bottom",
+						"bottom-end",
+						"top-start",
+						"top",
+						"top-end",
+						"left",
+						"right",
+					]
+				) {
+					const anchor = button(placement, { variant: "ghost" });
+					r.placements.append(anchor);
+					pop(placement, { anchor, body: placement, placement });
+				}
+
+				// a menu inside a modal dialog: both in the top layer, the
+				// popover above the dialog (later in, higher up)
+				track(
+					delegate(el, {
+						inDialog: () => {
+							const body = document.createElement("div");
+							const trigger = button("actions ▾");
+							body.append("A menu button inside a modal dialog. ", trigger);
+							const dlg = ui.createDialog({
+								title: "Popover in a dialog",
+								body,
+								onClose: (v) => {
+									log(`dialog → onClose("${v}")`);
+									dlg.destroy();
+								},
+							});
+							document.body.append(dlg.el);
+							// created once the anchor is in the document, so the popover
+							// lands next to it — inside the dialog, and gone with it
+							ui.createPopover({
+								anchor: trigger,
+								role: "menu",
+								body: fromTemplate("tpl-gallery-menu"),
+								onSelect: (value) =>
+									log(`dialog menu → vui:select "${value}"`),
+							});
+							dlg.open();
 						},
 					}),
 				);

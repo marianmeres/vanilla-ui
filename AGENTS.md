@@ -42,7 +42,8 @@ README.md · API.md        — human docs
    `@layer vui.components { @scope (.vui-<name>) { … } }`; exactly one `<script type="module">`
    that imports vanilla by **bare specifier** only and exports `create<Name>(props)`. The lint
    also fails raw `--vui-color-*` reads, unknown `--vui-*` names, color literals outside a
-   `var()` fallback, and any paint declared on a control selector (see 4 and 9).
+   `var()` fallback, and any paint declared on a control selector — buttons, inputs, menu
+   items (see 4 and 9).
 3. **`data-scope` on every root.** It is vanilla's component boundary; without it nested
    components collide on `data-ref` names and `data-on` actions.
 4. **Theming goes through the base vocabulary.** `components/base.css` reads every
@@ -59,15 +60,20 @@ README.md · API.md        — human docs
 6. **Containers take `Slot`s** (`string` → textContent, `HTMLElement` → placed, `ViewInstance`
    → `mount`ed and tracked). No general slot/children system.
 7. **Platform first.** Native `<dialog>`, Popover API, `<details>` before any hand-rolled
-   behavior. If a primitive would need keyed list diffing, defer it (see DESIGN §6).
+   behavior. The popover is the worked example (DESIGN §D10): `popover="auto"` for dismiss and
+   stacking, the anchor as the native invoker, CSS Anchor Positioning for placement — and JS
+   only where the browser has none of it. If a primitive would need keyed list diffing, defer
+   it (see DESIGN §6).
 8. **Types live in `src/mod.ts`.** Components are plain JS; declare `<Name>Props`,
    `<Name>View`, `Create<Name>`, add `load<Name>()`, and extend `VanillaUi` + `loadAll()`.
 9. **Controls belong to the base layer, never to a component.** Buttons and inputs are styles,
    not components (DESIGN §D9): `.vui-btn` + the five design-tokens roles
    (`--primary|accent|destructive|warning|success`) + `--ghost|--icon`, `.vui-input`,
-   `.vui-field`, `.vui-row` in `components/base.css`, plus a zero-specificity
-   default so a **bare `<button>` inside any vui component** (a consumer's slot content) is
-   styled too. A component may position a control; it may not paint one — to adapt controls to
+   `.vui-field`, `.vui-row`, and the menu item — keyed on `role="menuitem"` inside a component,
+   `.vui-menuitem` (+ `--destructive`) outside, laid out by `.vui-menu` — in
+   `components/base.css`, plus a zero-specificity default so a **bare `<button>` inside any
+   vui component** (a consumer's slot content) is styled too. A component may position a
+   control; it may not paint one — to adapt controls to
    its surface it re-declares the **context channel**
    (`--vui-control-bg|-foreground|-bg-hover|-bg-active|-border`, and the sizes
    `-min-height|-py|-px|-size`) **on itself** and lets them inherit — which is also all a button
@@ -86,14 +92,16 @@ README.md · API.md        — human docs
 
 ## Adding a Component
 
-1. Create `components/<name>.html` following the anatomy in Convention 2 (copy `dialog.html`):
-   `<style>` wrapped in `@layer vui.components { @scope (.vui-<name>) { … } }`, colors from the
-   base vocabulary, no control painting (Convention 9).
+1. Create `components/<name>.html` following the anatomy in Convention 2 (copy `dialog.html`,
+   or `popover.html` for anything anchored to a trigger): `<style>` wrapped in
+   `@layer vui.components { @scope (.vui-<name>) { … } }`, colors from the base vocabulary, no
+   control painting (Convention 9).
 2. Add types + `load<Name>()` to `src/mod.ts` (`await loadStyles(base)` first); extend
    `VanillaUi` and `loadAll()`.
 3. Add `tests/browser/<name>.html` (copy `dialog.html`): one `ok`/`FAIL` line per check into
-   `#result`, `DONE` last. Wait for native async events (a dialog's `close`) with a listener,
-   never a timer.
+   `#result`, `DONE` last. Wait for native async events (a dialog's `close`, a popover's
+   `toggle`) with a listener, never a timer. Geometry is measurable right after `open()` if
+   the page sets `--vui-transition: 0ms` (see `tests/browser/popover.html`).
 4. Add a `<section class="component" id="<name>">` to `gallery/index.html` covering every state.
    Use `.vui-btn` / `.vui-row` for any control it needs — the gallery defines no control styles
    of its own on purpose (it must test what ships).
@@ -121,7 +129,8 @@ README.md · API.md        — human docs
 ## Documentation Index
 
 - [docs/DESIGN.md](./docs/DESIGN.md) — why shipped templates, tokens-with-fallbacks, `data-scope`,
-  events, the base layer (§D9); component anatomy; roadmap; non-goals.
+  events, the base layer (§D9), the popover's platform-first split (§D10); component anatomy;
+  roadmap; non-goals.
 - [components/base.css](./components/base.css) — the vocabulary and the control primitives; its
   header comment is the reference for both.
 - [README.md](./README.md) — overview, usage, theming, gallery.

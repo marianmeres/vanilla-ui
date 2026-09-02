@@ -18,12 +18,13 @@ rationale is in [`docs/DESIGN.md`](./docs/DESIGN.md).
 
 ## Components
 
-| Component | File                                                 | Built on          | Status |
-| --------- | ---------------------------------------------------- | ----------------- | ------ |
-| dialog    | [`components/dialog.html`](./components/dialog.html) | native `<dialog>` | ✅     |
+| Component      | File                                                   | Built on                             | Status |
+| -------------- | ------------------------------------------------------ | ------------------------------------ | ------ |
+| dialog         | [`components/dialog.html`](./components/dialog.html)   | native `<dialog>`                    | ✅     |
+| popover / menu | [`components/popover.html`](./components/popover.html) | Popover API + CSS Anchor Positioning | ✅     |
 
-Planned, in this order: menu/popover (Popover API), disclosure (`<details>`), tabs, toast.
-See [`docs/DESIGN.md` → Roadmap](./docs/DESIGN.md#5-roadmap).
+Planned, in this order: disclosure (`<details>`), tabs, toast. See
+[`docs/DESIGN.md` → Roadmap](./docs/DESIGN.md#5-roadmap).
 
 ## Install
 
@@ -85,6 +86,43 @@ folder)? Pass the base: `loadAll("https://cdn.example/vanilla-ui/components/")`.
 Components also emit **`CustomEvent`s** on their root (`vui:close` here), so a plain listener
 works too — handy when the dialog is created far from where its result is needed.
 
+### A menu, or any popover
+
+`createPopover` is an anchored, light-dismissing surface on the native Popover API — click
+outside or Esc closes it, CSS Anchor Positioning places it (and flips it at the viewport edge;
+a browser without it gets the same from a few lines of JS). A `<button>` anchor is the native
+invoker, so the platform toggles it. With `role: "menu"` it is a menu: the items are bare
+`<button role="menuitem">`s, painted by the base layer for that role alone, and the kit adds
+focus, ↑ ↓ Home End, Tab-to-close and `vui:select`.
+
+```html
+<button id="more" class="vui-btn">more ▾</button>
+
+<template id="tpl-actions">
+	<div class="vui-menu">
+		<button role="menuitem" value="rename">Rename <kbd>F2</kbd></button>
+		<hr />
+		<button role="menuitem" value="delete"
+			class="vui-menuitem--destructive">Delete</button>
+	</div>
+</template>
+
+<script type="module">
+import { fromTemplate, loadAll } from "@marianmeres/vanilla-ui";
+
+const { createPopover } = await loadAll();
+createPopover({
+	anchor: document.getElementById("more"), // toggles it; the popover lands right after it
+	role: "menu",
+	body: fromTemplate("tpl-actions"),
+	onSelect: (value) => console.log("picked:", value), // "rename" | "delete"
+});
+</script>
+```
+
+Leave `role` off for a plain popover (a form, a hint, anything) and pick a `placement`
+(`"bottom-start"` by default, `"top"`, `"right"`, …).
+
 ### Everything from vanilla is here too
 
 The index re-exports the whole base library, so one import gives you `observable`,
@@ -135,8 +173,10 @@ variants are the five `design-tokens` semantic roles, so a theme drives them all
 ```
 
 …and inside any vui component, bare markup gets that same look with no classes at all, which is
-what makes a `<form method="dialog">` dropped into a dialog body come out right. Building a
-footer in JS? `button("Delete", { variant: "destructive", onClick })` returns an element with
+what makes a `<form method="dialog">` dropped into a dialog body come out right. A menu item is
+the third control, keyed on its role: `<button role="menuitem">` in a `.vui-menu` needs no class
+either (`.vui-menuitem` is the same look outside a component; `--destructive` tints it). Building
+a footer in JS? `button("Delete", { variant: "destructive", onClick })` returns an element with
 those classes on it. A container adapts every control inside it — its own and yours — by
 re-declaring `--vui-control-bg` &c. on itself; no descendant selectors anywhere. A variant is
 that same move one element down (which is why a `--success` button in a dialog footer stays

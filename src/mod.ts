@@ -15,9 +15,9 @@
  *   2. **Knows where the components live** — {@link COMPONENTS_BASE} is resolved from
  *      this module's own URL, so the kit works from wherever it is served (a sibling
  *      folder, a vendored copy, a CDN) with no configuration.
- *   3. **Loads them with types** — {@link loadAll} / {@link loadDialog} return the
- *      factories typed by the interfaces declared here (the `.html` files are plain
- *      JS; the types live in this file).
+ *   3. **Loads them with types** — {@link loadAll} / {@link loadDialog} /
+ *      {@link loadPopover} return the factories typed by the interfaces declared
+ *      here (the `.html` files are plain JS; the types live in this file).
  *   4. **Installs the base style layer** ({@link loadStyles}, called by every loader)
  *      — `components/base.css`: the design-token vocabulary every component reads
  *      and the kit's control primitives (`.vui-btn`, `.vui-input`). Buttons are
@@ -143,6 +143,12 @@ export interface ButtonOptions {
 	disabled?: boolean;
 	/** `aria-label`, for an icon button whose text is a glyph. */
 	ariaLabel?: string;
+	/**
+	 * The `role` attribute. `"menuitem"` makes it a menu item: inside a menu
+	 * {@link CreatePopover popover} the keyboard reaches it, and the base layer
+	 * paints it as one (by the role, over `.vui-btn`).
+	 */
+	role?: string;
 	/** Extra class names, appended. */
 	class?: string;
 	/** Click handler. It lives and dies with the element — there is no view to track. */
@@ -184,6 +190,7 @@ export function button(label: string, opts: ButtonOptions = {}): HTMLButtonEleme
 	if (opts.value != null) el.value = opts.value;
 	if (opts.disabled) el.disabled = true;
 	if (opts.ariaLabel) el.setAttribute("aria-label", opts.ariaLabel);
+	if (opts.role) el.setAttribute("role", opts.role);
 	if (opts.onClick) el.addEventListener("click", opts.onClick as EventListener);
 	return el;
 }
@@ -251,24 +258,117 @@ export async function loadDialog(base: string = COMPONENTS_BASE): Promise<Create
 }
 
 /* ============================================================================
+ * popover — components/popover.html
+ * ========================================================================== */
+
+/**
+ * Where a popover goes, relative to its anchor — the **preferred** side; it flips
+ * when it would overflow the viewport. `start` / `end` align the popover's inline
+ * edge with the anchor's; the bare side centers it.
+ */
+export type PopoverPlacement =
+	| "bottom-start"
+	| "bottom"
+	| "bottom-end"
+	| "top-start"
+	| "top"
+	| "top-end"
+	| "left"
+	| "right";
+
+/** Props of {@link CreatePopover}. Only `anchor` is required. */
+export interface PopoverProps {
+	/**
+	 * The trigger — usually a `<button>`, which becomes the native popover
+	 * **invoker** (the browser toggles it on click and keyboard, and knows not to
+	 * light-dismiss on it). Any other element gets a click listener. It receives
+	 * `aria-expanded`, `aria-controls` and, for a `role` that warrants it,
+	 * `aria-haspopup`.
+	 */
+	anchor: HTMLElement;
+	/** Content — see {@link Slot}. For a menu: the items (see `role`). */
+	body?: Slot;
+	/** Preferred side. Default `"bottom-start"`. */
+	placement?: PopoverPlacement;
+	/** Gap from the anchor, in px. Default `4`. */
+	offset?: number;
+	/**
+	 * The root's ARIA role, set as given. `"menu"` **also** switches on the menu
+	 * behavior: the body's `[role="menuitem"]` elements (any of the three menuitem
+	 * roles) get focus on open, ↑ ↓ Home End navigation, hover-to-focus, Tab-to-close,
+	 * and activating one fires `onSelect` / `vui:select` and (by default) closes.
+	 */
+	role?: "menu" | "dialog" | "listbox" | (string & {});
+	/** Clicking the anchor toggles. Default `true`. */
+	trigger?: boolean;
+	/** Menu only: activating an item closes the popover. Default `true`. */
+	closeOnSelect?: boolean;
+	/** Called after the native `toggle` event reports it open. */
+	onOpen?: () => void;
+	/** Called after the native `toggle` event reports it closed — whatever closed it. */
+	onClose?: () => void;
+	/**
+	 * Menu only: an item was activated. `value` is the item's `value` attribute
+	 * (else its `data-value`, else its text); `item` the element.
+	 */
+	onSelect?: (value: string, item: HTMLElement) => void;
+}
+
+/** The view returned by {@link CreatePopover}. */
+export interface PopoverView extends ViewInstance {
+	/**
+	 * The `[popover="auto"]` root (`data-scope="popover"`). The factory inserts it
+	 * right after a connected anchor (the native invoker needs it in the document);
+	 * move it anywhere — the top layer handles stacking.
+	 */
+	el: HTMLElement;
+	/** The anchor it was created with. */
+	anchor: HTMLElement;
+	/** `true` while shown. Settled synchronously by `open()`/`close()` and by the native `toggle` for every other route (light dismiss, Esc, the invoker). */
+	isOpen: ReadonlyObservable<boolean>;
+	/** Show it (`showPopover()`), inserting `el` after the anchor if it is not in the document. No-op if open. */
+	open(): void;
+	/** Hide it (`hidePopover()`). No-op if not open. */
+	close(): void;
+	/** One or the other. */
+	toggle(): void;
+}
+
+/** The popover factory exported by `components/popover.html`. */
+export type CreatePopover = (props: PopoverProps) => PopoverView;
+
+/** Load `components/popover.html` and return its typed factory. Idempotent per URL. */
+export async function loadPopover(
+	base: string = COMPONENTS_BASE,
+): Promise<CreatePopover> {
+	await loadStyles(base);
+	const mod = await loadComponent(componentUrl("popover", base));
+	return mod.createPopover as CreatePopover;
+}
+
+/* ============================================================================
  * All of it
  * ========================================================================== */
 
 /** Every factory the kit ships, typed. What {@link loadAll} resolves to. */
 export interface VanillaUi {
 	createDialog: CreateDialog;
+	createPopover: CreatePopover;
 }
 
 /**
  * Load every component (in parallel) and return the typed factories. One `await`
  * before mounting is the whole setup:
  *
- *     const { createDialog } = await loadAll();
+ *     const { createDialog, createPopover } = await loadAll();
  */
 export async function loadAll(base: string = COMPONENTS_BASE): Promise<VanillaUi> {
 	// first, and awaited: it declares the cascade layer ORDER the components' own
 	// `@layer vui.components` blocks slot into
 	await loadStyles(base);
-	const [createDialog] = await Promise.all([loadDialog(base)]);
-	return { createDialog };
+	const [createDialog, createPopover] = await Promise.all([
+		loadDialog(base),
+		loadPopover(base),
+	]);
+	return { createDialog, createPopover };
 }

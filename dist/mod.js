@@ -315,6 +315,7 @@ function button(label, opts = {}) {
   if (opts.value != null) el.value = opts.value;
   if (opts.disabled) el.disabled = true;
   if (opts.ariaLabel) el.setAttribute("aria-label", opts.ariaLabel);
+  if (opts.role) el.setAttribute("role", opts.role);
   if (opts.onClick) el.addEventListener("click", opts.onClick);
   return el;
 }
@@ -323,10 +324,18 @@ async function loadDialog(base = COMPONENTS_BASE) {
   const mod = await loadComponent(componentUrl("dialog", base));
   return mod.createDialog;
 }
+async function loadPopover(base = COMPONENTS_BASE) {
+  await loadStyles(base);
+  const mod = await loadComponent(componentUrl("popover", base));
+  return mod.createPopover;
+}
 async function loadAll(base = COMPONENTS_BASE) {
   await loadStyles(base);
-  const [createDialog] = await Promise.all([loadDialog(base)]);
-  return { createDialog };
+  const [createDialog, createPopover] = await Promise.all([
+    loadDialog(base),
+    loadPopover(base)
+  ]);
+  return { createDialog, createPopover };
 }
 export {
   BASE_STYLES_ID,
@@ -344,6 +353,7 @@ export {
   loadAll,
   loadComponent,
   loadDialog,
+  loadPopover,
   loadStyles,
   loadTemplates,
   mount,

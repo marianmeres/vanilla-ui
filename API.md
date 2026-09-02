@@ -16,12 +16,12 @@ Fetch and adopt every component (in parallel) and return the typed factories. Ca
 - `base` (`string`, optional) — URL of the `components/` directory. Default:
   [`COMPONENTS_BASE`](#components_base).
 
-**Returns:** `Promise<VanillaUi>` — `{ createDialog }`.
+**Returns:** `Promise<VanillaUi>` — `{ createDialog, createPopover }`.
 
 **Example:**
 
 ```ts
-const { createDialog } = await loadAll();
+const { createDialog, createPopover } = await loadAll();
 ```
 
 ---
@@ -35,6 +35,18 @@ Load `components/dialog.html` alone and return its typed factory.
 - `base` (`string`, optional) — as in `loadAll`.
 
 **Returns:** `Promise<CreateDialog>`.
+
+---
+
+### `loadPopover(base?)`
+
+Load `components/popover.html` alone and return its typed factory.
+
+**Parameters:**
+
+- `base` (`string`, optional) — as in `loadAll`.
+
+**Returns:** `Promise<CreatePopover>`.
 
 ---
 
@@ -75,6 +87,9 @@ footers and toolbars assembled in JS.
   - `value` (`string`) — a `<form method="dialog">` submit's `value` becomes the dialog's
     `returnValue`.
   - `disabled` (`boolean`), `ariaLabel` (`string`), `class` (`string`, appended).
+  - `role` (`string`) — the `role` attribute. `"menuitem"` makes it a menu item: inside a menu
+    [popover](#createpopoverprops--componentspopoverhtml) the keyboard reaches it, and the
+    base layer paints it as one (by the role, over `.vui-btn`).
   - `onClick` (`(e: MouseEvent) => void`) — plain listener; it dies with the element.
 
 **Returns:** `HTMLButtonElement`.
@@ -282,22 +297,34 @@ consistent without a rule per variant. Your own role works the same way, no kit 
 
 ### Classes
 
-| Class                                                                          | What                                                       |
-| ------------------------------------------------------------------------------ | ---------------------------------------------------------- |
-| `.vui-btn`                                                                     | the button primitive (`all: unset` + the control paint)    |
-| `.vui-btn--primary` / `--accent` / `--destructive` / `--warning` / `--success` | the five design-tokens roles, filled                       |
-| `.vui-btn--ghost`                                                              | no fill; borrows its container's foreground on hover       |
-| `.vui-btn--icon`                                                               | square + round, for a single glyph                         |
-| `.vui-input` / `.vui-select`                                                   | text inputs, selects, textareas                            |
-| `.vui-field`                                                                   | a stacked `<label>` + full-width control                   |
-| `.vui-row`                                                                     | a wrapping flex row at `--vui-gap` (button rows, toolbars) |
+| Class                                                                          | What                                                         |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| `.vui-btn`                                                                     | the button primitive (`all: unset` + the control paint)      |
+| `.vui-btn--primary` / `--accent` / `--destructive` / `--warning` / `--success` | the five design-tokens roles, filled                         |
+| `.vui-btn--ghost`                                                              | no fill; borrows its container's foreground on hover         |
+| `.vui-btn--icon`                                                               | square + round, for a single glyph                           |
+| `.vui-input` / `.vui-select`                                                   | text inputs, selects, textareas                              |
+| `.vui-menuitem`                                                                | a menu item (what `role="menuitem"` gets inside a component) |
+| `.vui-menuitem--destructive`                                                   | colored text and a tinted hover — never a filled row         |
+| `.vui-field`                                                                   | a stacked `<label>` + full-width control                     |
+| `.vui-row`                                                                     | a wrapping flex row at `--vui-gap` (button rows, toolbars)   |
+| `.vui-menu`                                                                    | a vertical list of items, with `<hr>` separators             |
+
+**Menu items** are the third control, keyed on the ARIA role the menu popover needs anyway:
+inside any vui container, `[role="menuitem"]` (also `menuitemcheckbox` / `menuitemradio`) is
+painted as an item — transparent at rest, inheriting its surface's foreground, taking its hover
+and active from the [control context](#control-context) (never `--vui-control-bg`; a menu does
+not fill its items), a trailing `<kbd>` pushed to the far end. That rule is `:is()` at (0,1,0) on
+purpose, so the role wins over `.vui-btn` and `button("Rename", { role: "menuitem" })` comes out
+as an item. Don't put `.vui-btn--destructive` on one (its white foreground on no fill);
+`.vui-menuitem--destructive` is the item-shaped version.
 
 ### Bare markup inside a component
 
 Any element carrying a `vui-` class is a **container hook**: bare `<button>`, `<input>`,
-`<select>` and `<textarea>` descendants get the control look with no classes at all. So a
-`<form method="dialog">` dropped into a dialog body is styled, and takes that dialog's control
-context, without knowing the kit exists:
+`<select>`, `<textarea>` and `[role="menuitem"]` descendants get the control look with no
+classes at all. So a `<form method="dialog">` dropped into a dialog body is styled, and takes
+that dialog's control context, without knowing the kit exists:
 
 ```html
 <form method="dialog">
@@ -397,6 +424,121 @@ A `<form method="dialog">` inside `body` closes the dialog natively; give each s
 
 ---
 
+### `createPopover(props)` — `components/popover.html`
+
+An anchored, light-dismissing surface on the native Popover API (`popover="auto"`): top layer,
+click-outside and Esc to dismiss, one auto popover at a time with nesting, focus restore. A
+`<button>` anchor becomes the native **invoker** — the browser toggles it, on click and keyboard,
+and knows not to light-dismiss on it. Placement is CSS Anchor Positioning (flipping at the
+viewport edge via `position-try-fallbacks`) where the browser has it, and a small JS
+measure / flip / clamp — re-run on scroll and resize while open — where it does not. With
+`role: "menu"` it is a menu. Rationale: [`docs/DESIGN.md` §D10](./docs/DESIGN.md).
+
+**Parameters:** `props` (`PopoverProps`) — only `anchor` is required
+
+| Prop            | Type                                         | Default          | Description                                                                                                                                                                            |
+| --------------- | -------------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `anchor`        | `HTMLElement`                                | —                | The trigger. A `<button>`/`<input>` is the native invoker; anything else gets a click listener. Receives `aria-expanded`, `aria-controls`, and `aria-haspopup` when `role` warrants it |
+| `body`          | `Slot`                                       | —                | Content: text, an element, or a view. For a menu: the items                                                                                                                            |
+| `placement`     | `PopoverPlacement`                           | `"bottom-start"` | The **preferred** side; it flips when it would overflow. `start`/`end` align the popover's inline edge with the anchor's, the bare side centers it                                     |
+| `offset`        | `number`                                     | `4`              | Gap from the anchor, px                                                                                                                                                                |
+| `role`          | `string`                                     | —                | The root's ARIA role, set as given. `"menu"` **also** switches on the menu behavior (below)                                                                                            |
+| `trigger`       | `boolean`                                    | `true`           | Clicking the anchor toggles                                                                                                                                                            |
+| `closeOnSelect` | `boolean`                                    | `true`           | Menu: activating an item closes                                                                                                                                                        |
+| `onOpen`        | `() => void`                                 | —                | After the native `toggle` reports it open                                                                                                                                              |
+| `onClose`       | `() => void`                                 | —                | After the native `toggle` reports it closed — whatever closed it                                                                                                                       |
+| `onSelect`      | `(value: string, item: HTMLElement) => void` | —                | Menu: an item was activated                                                                                                                                                            |
+
+**Returns:** `PopoverView`
+
+| Member      | Description                                                                                                                                                        |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `el`        | The `[popover="auto"]` root (`data-scope="popover"`). The factory inserts it right after a connected anchor — the invoker needs it in the document; move it freely |
+| `anchor`    | The anchor it was created with                                                                                                                                     |
+| `isOpen`    | `ReadonlyObservable<boolean>` — settled synchronously by `open()`/`close()`, and by the native `toggle` for every other route                                      |
+| `open()`    | `showPopover()`; inserts `el` after the anchor first if it is not in the document. No-op if open                                                                   |
+| `close()`   | `hidePopover()`. No-op if not open                                                                                                                                 |
+| `toggle()`  | One or the other                                                                                                                                                   |
+| `destroy()` | Runs cleanups (the anchor's attributes, name and invoker link are restored), destroys a mounted `body` view, removes `el`                                          |
+
+**Menu** (`role: "menu"`): the body holds the items — any element with `role="menuitem"`,
+`menuitemcheckbox` or `menuitemradio`, typically `<button>`s in a `.vui-menu` (painted by the
+[base layer](#classes) for that role, no classes needed). Opening focuses the first enabled item;
+↑ ↓ move (wrapping), Home / End jump, hovering focuses, Tab closes; Enter / Space activate
+(natively for a `<button>`, by hand for anything else). Activating fires `onSelect` /
+`vui:select` with the item's `value` attribute (else `data-value`, else its text) and, by default,
+closes. Items that are `disabled`, `aria-disabled="true"` or hidden are skipped. Items inside a
+nested `data-scope` belong to that component, not to the menu.
+
+**Events** (dispatched on `el`, bubbling):
+
+| Event        | `detail`          | When                                  |
+| ------------ | ----------------- | ------------------------------------- |
+| `vui:open`   | `{ anchor }`      | after the native `toggle` (any route) |
+| `vui:close`  | `{ anchor }`      | after the native `toggle` (any route) |
+| `vui:select` | `{ value, item }` | menu: an item was activated           |
+
+**CSS variables read** (from the [base vocabulary](#the-vocabulary) and
+[structural tokens](#structural-tokens), each with a fallback):
+
+`--vui-surface`, `--vui-surface-foreground`, `--vui-border`, `--vui-border-width`,
+`--vui-radius-container`, `--vui-shadow-overlay`, `--vui-transition`.
+
+**CSS variables set** — on the root, so every control inside it lifts off the surface exactly as
+in the dialog panel: `--vui-control-bg`, `--vui-control-foreground`, `--vui-control-bg-hover`,
+`--vui-control-bg-active`, `--vui-control-border`. Menu items take only the hover and active from
+these.
+
+**Example** — a menu:
+
+```html
+<button id="more" class="vui-btn">more ▾</button>
+<template id="tpl-actions">
+	<div class="vui-menu">
+		<button role="menuitem" value="rename">Rename <kbd>F2</kbd></button>
+		<button role="menuitem" value="archive" disabled>Archive</button>
+		<hr />
+		<button role="menuitem" value="delete"
+			class="vui-menuitem--destructive">Delete</button>
+	</div>
+</template>
+```
+
+```ts
+const menu = createPopover({
+	anchor: document.getElementById("more"),
+	role: "menu",
+	body: fromTemplate("tpl-actions"),
+	onSelect: (value) => value === "delete" && store.deleteSelected(),
+});
+// nothing else to wire: the anchor toggles it, light dismiss closes it
+menu.el.addEventListener("vui:select", (e) => console.log(e.detail.value, e.detail.item));
+```
+
+A plain popover is the same without `role` — a form, say, whose bare controls are lifted by the
+surface:
+
+```ts
+const pop = createPopover({
+	anchor: subscribeBtn,
+	body: fromTemplate("tpl-subscribe-form"),
+	placement: "bottom-end",
+});
+pop.el.querySelector("form").addEventListener("submit", (e) => {
+	e.preventDefault();
+	pop.close();
+});
+```
+
+Positioning notes: `start`/`end` follow the writing direction (the six vertical placements use
+logical `position-area` keywords); `left`/`right` are physical. The anchored path never runs JS
+after open — the browser re-resolves the placement every frame — so an anchor that moves, a
+window that resizes, and a page that scrolls all just work. A popover taller than the space on
+either side is not shrunk on the anchored path (it flips, then stays); the JS path clamps it into
+the viewport.
+
+---
+
 ## Types
 
 ### `Slot`
@@ -427,6 +569,7 @@ interface ButtonOptions {
 	value?: string;
 	disabled?: boolean;
 	ariaLabel?: string;
+	role?: string; // "menuitem" → a menu item
 	class?: string;
 	onClick?: (e: MouseEvent) => void;
 }
@@ -463,11 +606,62 @@ interface DialogView extends ViewInstance {
 type CreateDialog = (props?: DialogProps) => DialogView;
 ```
 
+### `PopoverPlacement`
+
+```ts
+type PopoverPlacement =
+	| "bottom-start"
+	| "bottom"
+	| "bottom-end"
+	| "top-start"
+	| "top"
+	| "top-end"
+	| "left"
+	| "right";
+```
+
+### `PopoverProps`
+
+```ts
+interface PopoverProps {
+	anchor: HTMLElement; // required
+	body?: Slot;
+	placement?: PopoverPlacement; // default "bottom-start"
+	offset?: number; // px, default 4
+	role?: "menu" | "dialog" | "listbox" | (string & {}); // "menu" switches the menu behavior on
+	trigger?: boolean; // default true
+	closeOnSelect?: boolean; // menu; default true
+	onOpen?: () => void;
+	onClose?: () => void;
+	onSelect?: (value: string, item: HTMLElement) => void; // menu
+}
+```
+
+### `PopoverView`
+
+```ts
+interface PopoverView extends ViewInstance {
+	el: HTMLElement;
+	anchor: HTMLElement;
+	isOpen: ReadonlyObservable<boolean>;
+	open(): void;
+	close(): void;
+	toggle(): void;
+}
+```
+
+### `CreatePopover`
+
+```ts
+type CreatePopover = (props: PopoverProps) => PopoverView;
+```
+
 ### `VanillaUi`
 
 ```ts
 interface VanillaUi {
 	createDialog: CreateDialog;
+	createPopover: CreatePopover;
 }
 ```
 

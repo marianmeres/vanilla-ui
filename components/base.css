@@ -18,16 +18,20 @@
  *      rounded card are not the same rounding, and a popover and a modal are
  *      not the same elevation.
  *
- *   3. THE CONTROL PRIMITIVES — buttons, inputs, the focus ring. A button is a
- *      *style* primitive, not a component: it has no behavior, and a factory
- *      could not reach the `<button value="save">` a consumer writes inside a
- *      `<form method="dialog">` in a dialog's slot. CSS can. Two ways in:
+ *   3. THE CONTROL PRIMITIVES — buttons, inputs, menu items, the focus ring. A
+ *      button is a *style* primitive, not a component: it has no behavior, and
+ *      a factory could not reach the `<button value="save">` a consumer writes
+ *      inside a `<form method="dialog">` in a dialog's slot. CSS can. Two ways
+ *      in:
  *
  *        <button class="vui-btn vui-btn--primary">   — anywhere on the page
  *        <button>                                    — inside any vui component
+ *        <button role="menuitem">                    — a menu item, by its role
  *
  *      The second is a zero-specificity default (see "the container hook"
  *      below), so slot content looks right with no consumer knowledge at all.
+ *      The third is keyed on the ARIA role the popover's menu glue needs
+ *      anyway — one attribute buys the semantics, the keyboard and the look.
  *
  * CASCADE LAYERS. Everything here is in `vui.base`; every component's `@scope`
  * block is in `vui.components`. Layered styles lose to unlayered ones whatever
@@ -388,7 +392,88 @@
 		cursor: pointer;
 	}
 
-	/* ── two layout helpers the kit's own chrome and its consumers both need ── */
+	/* ── menu items ──────────────────────────────────────────────────────────
+	   The third control: an item in a menu (a popover with `role: "menu"`).
+	   Keyed on the ROLE, not a class — whoever writes `role="menuitem"` (which
+	   the keyboard and aria glue need anyway) has asked for a menu item, so
+	   inside a vui container that is all it takes. `.vui-menuitem` is the same
+	   look for markup outside one. The bare form uses :is(), not :where(), on
+	   purpose: it weighs (0,1,0) so that a `<button role="menuitem">` built by
+	   button() — which also carries `.vui-btn` — comes out as the item its role
+	   says it is. Written after the button rules so it wins the tie.
+
+	   At rest an item is transparent on its surface and inherits its
+	   foreground — it does not read `--vui-control-bg`, a menu never fills its
+	   items — but hover and active come from the channel like any control, so
+	   a container that lifts its controls lifts the items' hover with them. */
+	.vui-menuitem,
+	:where([class^="vui-"], [class*=" vui-"]) :is([role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]) {
+		all: unset;
+		box-sizing: border-box;
+		display: flex;
+		align-items: center;
+		gap: 0.6em;
+		width: 100%;
+		cursor: pointer;
+		user-select: none;
+		white-space: nowrap;
+		text-align: start;
+		line-height: 1.25;
+		min-height: var(--vui-control-min-height, 2.25rem);
+		padding: var(--vui-control-py, 0.4rem) var(--vui-control-px, 0.75rem);
+		border-radius: var(--vui-radius);
+		color: inherit;
+		transition: background-color var(--vui-transition);
+
+		&:hover,
+		&:focus-visible {
+			background: var(--vui-control-bg-hover, var(--vui-surface-hover));
+		}
+		/* the one focus ring, drawn inside — an outset ring in a tight list
+		   collides with its neighbours and the popover's edge */
+		&:focus-visible {
+			outline: var(--vui-focus-width) solid var(--vui-ring);
+			outline-offset: calc(-1 * var(--vui-focus-width));
+		}
+		&:active {
+			background: var(
+				--vui-control-bg-active,
+				color-mix(
+					in srgb,
+					currentColor 12%,
+					var(--vui-control-bg-hover, var(--vui-surface-hover))
+				)
+			);
+		}
+		&:disabled,
+		&[aria-disabled="true"] {
+			cursor: not-allowed;
+			opacity: 0.5;
+			background: transparent;
+		}
+		/* a trailing hint — a shortcut in <kbd>, a badge — sits at the far end
+		   (the flex gap is its minimum distance from the label; a page's own
+		   <kbd> look, a Reboot pill say, is left alone) */
+		& > kbd {
+			margin-inline-start: auto;
+			font: inherit;
+			font-size: 0.85em;
+			color: var(--vui-muted-foreground);
+		}
+	}
+	/* the one item modifier: a destructive action reads as colored text and a
+	   tinted hover, never a filled row — `.vui-btn--destructive` on an item
+	   would paint its foreground white on nothing */
+	.vui-menuitem--destructive {
+		color: var(--vui-destructive);
+
+		&:hover,
+		&:focus-visible {
+			background: color-mix(in srgb, var(--vui-destructive) 12%, transparent);
+		}
+	}
+
+	/* ── layout helpers the kit's own chrome and its consumers both need ────── */
 	.vui-row {
 		display: flex;
 		flex-wrap: wrap;
@@ -407,6 +492,23 @@
 		}
 		& > :where(input, select, textarea) {
 			inline-size: 100%;
+		}
+	}
+	/* a vertical list of menu items, with its separators. Layout only: the items
+	   paint themselves (by role, above) and the popover it sits in is the
+	   surface — so it works as a popover body and, just as well, inline. */
+	.vui-menu {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		min-width: 10rem;
+		padding: 0.25rem;
+
+		& > hr,
+		& > [role="separator"] {
+			margin: 0.25rem 0;
+			border: 0;
+			border-top: var(--vui-border-width) solid var(--vui-border);
 		}
 	}
 }

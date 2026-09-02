@@ -17,4 +17,9 @@ the --vui-control-* channel (colors and sizes) on themselves, so a new role is f
 properties and no new rule; the channel's defaults are var() fallbacks at the usage sites, never
 :root declarations, so they resolve at the control. The
 typed index (src/mod.ts) re-exports vanilla, resolves URLs from its own location, and exposes
-loadAll()/load<Name>()/loadStyles(). First primitive: dialog on the native <dialog>.
+loadAll()/load<Name>()/loadStyles(). Primitives so far: dialog on the native <dialog>; popover on
+the native Popover API (popover="auto": top layer, light dismiss, nesting; a <button> anchor is
+the native invoker), placed by CSS Anchor Positioning with position-try flips and by a small JS
+measure/flip/clamp where a browser lacks it, and with role "menu" a menu (focus on open,
+arrow/Home/End keys, Tab closes, vui:select with the item's value) whose items base.css paints by
+their role alone (.vui-menu, .vui-menuitem, --destructive).

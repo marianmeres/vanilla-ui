@@ -153,7 +153,7 @@ only ever appears as a context-channel suffix, which is stuic's convention too).
 colors sit the **structural tokens**, taken from stuic's tiering: radius and shadow in three
 tiers each (element / button / container; resting / overlay / dialog), `--vui-border-width`,
 `--vui-transition`. The dialog is a container and casts a dialog shadow; a button is a button;
-the popover on the roadmap will be an overlay. One size does not fit.
+the popover is an overlay. One size does not fit.
 
 **2. The controls.** A button is a **style** primitive, not a component. It has no behavior, so
 it would drag `createView` / `track` / `destroy` / `data-scope` onto a leaf that needs none of
@@ -215,6 +215,65 @@ Three mechanisms make it hold together:
 own `#vui-base` element). For this audience — prototypes, where a slot that looks right with
 zero classes is the entire point — that is a good trade. It would not be for a public library
 styling other people's markup.
+
+**The third control is keyed on a role.** A menu item is `<button role="menuitem">` — the
+attribute the menu's keyboard and aria glue need anyway — and inside a vui container that is
+also what paints it. One attribute buys the semantics, the navigation and the look; `.vui-menuitem`
+is the same look for markup outside a container, `.vui-menu` lays a list out. The bare form
+uses `:is()` rather than `:where()` on purpose: at (0,1,0) it ties with `.vui-btn` and, written
+later, wins — so an item built by `button(label, { role: "menuitem" })`, which carries `.vui-btn`
+too, comes out as the item its role says it is. An item never reads `--vui-control-bg` (a menu
+does not fill its items) but takes hover and active from the channel, so a surface that lifts its
+controls lifts the items' hover with them. `.vui-btn--destructive` on an item would paint its
+foreground white on nothing; `.vui-menuitem--destructive` — colored text, tinted hover — is the
+one modifier.
+
+### D10 — Popover: the platform dismisses, CSS places, JS fills only the gap
+
+The second primitive is where "platform first" (D8) gets specific. Three layers, in the order
+they are trusted:
+
+1. **`popover="auto"` does the behavior.** Top layer, light dismiss on a click outside, Esc as
+   a close watcher (so it works with focus anywhere), one auto popover at a time _with_ nesting
+   (a popover opened from inside another stays inside it), and focus restore on close. A
+   `<button>` anchor is made the native **invoker** (`popoverTargetElement`): the browser toggles
+   it on click and keyboard, exempts it from light dismiss — without that, the pointerdown that
+   closes the popover is followed by the click that reopens it — nests correctly, and exposes
+   `aria-expanded` itself. That relationship needs the popover in the document before the first
+   click, which is why `createPopover()` is the one factory in the kit that places its own
+   element (right after a connected anchor; `open()` does the same for an anchor connected
+   later). The native `toggle` event is the single source of truth for state and events, exactly
+   as the dialog's `close` is: `open()`/`close()` mirror it synchronously, every other route
+   (light dismiss, Esc, the invoker, a bare `togglePopover()`) arrives there and nowhere else.
+
+2. **CSS Anchor Positioning does the placement.** The anchor is named, the popover points at it,
+   an inline `position-area` says which side, and `position-try-fallbacks` flips it — the other
+   side, the other alignment, both, and as a last resort a full-width row with the popover
+   centered — re-resolved by the browser on every frame with no listener at all. The gap is a
+   margin on the anchor-facing side only (a margin all round would push a start-aligned box off
+   the anchor's edge by that much; the try tactics swap margins along with everything else, so a
+   flipped box keeps its gap). Support is decided per instance and all-or-nothing: `anchor-name`,
+   `position-area` and `position-try-fallbacks`, or none of it — a half-supporting browser gets
+   the JS path, not a half-working popover.
+
+3. **JS does the placement only where the browser cannot.** Measure the anchor, flip if the
+   preferred side has no room and the other one has, clamp into the viewport, re-run on scroll
+   and resize while open. Stuic's popover falls back to a _centered modal_ instead; the kit does
+   not follow it, for two reasons. The top layer makes a fixed popover's containing block the
+   viewport, always — the transformed-ancestor cases that made stuic's fallback (and its
+   `clampIntoViewport` backstop on the anchored path) necessary do not arise here, because the
+   popover is never appended into a consumer's container. And a placement that changes shape
+   per browser is a worse prototype than one that is the same everywhere for thirty lines. The
+   anchored path gets no JS backstop either: two mechanisms fighting over one box on every
+   scroll is exactly the kind of cleverness D8 avoids.
+
+**Menu is a mode, not a component.** `role: "menu"` adds the aria and keyboard glue — focus the
+first item on open, ↑ ↓ Home End, hover-to-focus, Tab closes, `vui:select` with the item's
+`value` — over the same surface. A separate `menu.html` would have to duplicate the placement
+(components import only vanilla; cross-file composition does not exist, by the anatomy
+contract), and the glue is thirty lines over markup the consumer writes anyway. Items are
+markup, not an `items` array: that is P2, and it is also what keeps a keyed-list reconciler out
+(D8) — the popover queries `[role^="menuitem"]` at keydown time and holds no list state.
 
 ---
 
@@ -293,14 +352,14 @@ path for the `.html` files.
 
 In this order — each one mostly platform:
 
-| # | Component       | Built on                       | Notes                                                                        |
-| - | --------------- | ------------------------------ | ---------------------------------------------------------------------------- |
-| 1 | dialog          | `<dialog>`                     | ✅ shipped                                                                   |
-| 2 | menu / popover  | Popover API (`popover="auto"`) | light-dismiss native; anchor positioning where supported, fallback otherwise |
-| 3 | disclosure      | `<details>` / `<summary>`      | mostly styling + an `isOpen` observable                                      |
-| 4 | tabs            | roving `tabindex`, aria-tabs   | static panels; no list diffing                                               |
-| 5 | toast           | region + timers                | a leaf; `mount` into a fixed host                                            |
-| — | select/combobox | listbox + keyed options        | **deferred** — needs keyed lists (D8)                                        |
+| # | Component       | Built on                       | Notes                                                                   |
+| - | --------------- | ------------------------------ | ----------------------------------------------------------------------- |
+| 1 | dialog          | `<dialog>`                     | ✅ shipped                                                              |
+| 2 | menu / popover  | Popover API (`popover="auto"`) | ✅ shipped — one `popover` component, `role: "menu"` for the menu (D10) |
+| 3 | disclosure      | `<details>` / `<summary>`      | mostly styling + an `isOpen` observable                                 |
+| 4 | tabs            | roving `tabindex`, aria-tabs   | static panels; no list diffing                                          |
+| 5 | toast           | region + timers                | a leaf; `mount` into a fixed host                                       |
+| — | select/combobox | listbox + keyed options        | **deferred** — needs keyed lists (D8)                                   |
 
 ---
 
@@ -322,4 +381,6 @@ In this order — each one mostly platform:
   explicit, native and free.
 - **No slot/children system** beyond `Slot`. No named slots, no projection.
 - **No a11y/browser-matrix guarantees.** Native elements carry most of it; the kit targets
-  current evergreen browsers (`@scope`, `color-mix`, `<dialog>`, Popover API).
+  current evergreen browsers (`@scope`, `color-mix`, `<dialog>`, Popover API). CSS Anchor
+  Positioning is the one place with a fallback (D10), because it is the one place where an
+  evergreen browser still lacks the feature.

@@ -1,0 +1,498 @@
+<!--
+	vui · popover — an anchored, light-dismissing surface on the native Popover
+	API. With `role: "menu"` it is a menu: the same surface plus the aria and
+	keyboard glue over the items inside it.
+
+	SINGLE-FILE COMPONENT: markup (<template>), styling (<style>, @scope'd and
+	@layer'd) and logic (inline <script type="module">) in one file. Load it with
+	loadComponent() (or the typed loadPopover() / loadAll() from the index).
+
+	The platform does the heavy lifting. `popover="auto"` gives the top layer,
+	light dismiss (click outside; Esc is a close watcher, so it works with focus
+	anywhere), one auto popover at a time — with nesting, so a popover opened
+	from inside another stays inside it — and focus restore on close. A <button>
+	anchor becomes the native INVOKER (popoverTargetElement): the browser toggles
+	it on click and keyboard, exempts it from light dismiss (no close-then-reopen
+	on the one click), and exposes aria-expanded itself.
+
+	PLACEMENT is CSS Anchor Positioning where the browser has it: the anchor is
+	named, the popover points at it, an inline `position-area` says which side,
+	and `position-try-fallbacks` (in <style>) flips it — other side, other
+	alignment, both — when it would overflow, re-resolved by the browser on every
+	frame with no JS at all. Where it has not (as of writing, Firefox), a small
+	JS placement does the same job: measure, flip, clamp into the viewport, and
+	again on scroll and resize while open. Either way the popover lives in the
+	top layer, so its containing block is the viewport: no transformed-ancestor
+	cases, no z-index, no portal.
+
+	Props:
+	  anchor        HTMLElement  REQUIRED — the trigger, usually a <button>.
+	                             Gets aria-expanded / aria-controls, and
+	                             aria-haspopup when `role` warrants it.
+	  body          Slot         text | HTMLElement | view — the content
+	  placement     string       "bottom-start" | "bottom" | "bottom-end" |
+	                             "top-start" | "top" | "top-end" | "left" |
+	                             "right" — the PREFERRED side; `start`/`end`
+	                             align the popover's inline edge with the
+	                             anchor's.                        [bottom-start]
+	  offset        number       gap from the anchor, in px                  [4]
+	  role          string       the root's ARIA role, set as given ("dialog",
+	                             "listbox", …). "menu" ALSO switches on the
+	                             menu behavior below.                    [none]
+	  trigger       boolean      clicking the anchor toggles              [true]
+	  closeOnSelect boolean      (menu) activating an item closes         [true]
+	  onOpen        ()           callback up, after the native `toggle`
+	  onClose       ()           callback up, after the native `toggle`
+	  onSelect      (value, item) (menu) an item was activated
+
+	MENU (`role: "menu"`): the body holds the items — any element with
+	role="menuitem" (or menuitemcheckbox / menuitemradio), typically <button>s
+	in a `.vui-menu` (components/base.css paints them by that role, no classes
+	needed). Opening focuses the first enabled item; ↑ ↓ move (wrapping), Home /
+	End jump, hovering focuses, Tab closes; Enter / Space activate (natively for
+	a <button>, by hand for anything else). Activating fires `vui:select` with
+	the item's `value` attribute (else data-value, else its text) and, by
+	default, closes. Disabled (`disabled`, aria-disabled) and hidden items are
+	skipped.
+
+	Returns a view: { el, anchor, isOpen, open(), close(), toggle(), destroy() }
+
+	Where `el` goes: the factory inserts it right after a connected anchor — the
+	native invoker needs its target in the document before the first click — and
+	open() does the same for an anchor connected later. Move it anywhere you like
+	afterwards; the top layer handles stacking.
+
+	Events out (CustomEvent on `el`, bubbling):
+	  "vui:open"    detail: { anchor }        — after the native `toggle`
+	  "vui:close"   detail: { anchor }        — after the native `toggle`
+	  "vui:select"  detail: { value, item }   — (menu) on activation
+
+	Imports the library by BARE specifier — loadComponent() runs this module
+	from a blob: URL, which resolves only through the host's import map.
+-->
+<template id="tpl-vui-popover">
+	<div
+		class="vui-popover"
+		data-scope="popover"
+		popover="auto"
+		data-on="toggle:toggled; click:click; keydown:keydown; pointerover:hover"
+	></div>
+</template>
+
+<!--
+	Styles are adopted into <head> verbatim (global cascade), encapsulated by
+	native CSS @scope against the root class and placed in the `vui.components`
+	cascade layer (declared, and ordered after `vui.base`, by components/base.css).
+
+	This block styles the popover's own CHROME only. It never paints a control:
+	buttons, inputs and menu items inside it come from the base layer, and the
+	surface adapts them by re-declaring `--vui-control-*` on itself. Colors go
+	through the base vocabulary (`--vui-surface`, not `--vui-color-surface`) with
+	a system-color fallback, so a theme is optional and this file still renders
+	alone.
+-->
+<style>
+@layer vui.components {
+	@scope (.vui-popover) {
+		:scope {
+			--_bg: var(--vui-surface, Canvas);
+			--_fg: var(--vui-surface-foreground, CanvasText);
+			--_border: var(
+				--vui-border,
+				color-mix(in srgb, CanvasText 20%, transparent)
+			);
+			--_radius: var(--vui-radius-container, 0.75rem);
+
+			/* reset the UA [popover] box — a 3px border, .25em padding and
+			   `margin: auto`, which would center it inside its position-area —
+			   then draw our own. The UA's `inset: 0` stays: with a position-area
+			   it means "the whole region", and fit-content sizing plus the
+			   default alignment toward the anchor do the rest. The JS placement
+			   sets its own insets. */
+			margin: 0;
+			padding: 0.75rem 1rem;
+			border: var(--vui-border-width, 1px) solid var(--_border);
+			border-radius: var(--_radius);
+			background: var(--_bg);
+			color: var(--_fg);
+			box-shadow: var(--vui-shadow-overlay, 0 8px 24px -12px rgb(0 0 0 / 0.35));
+			max-width: calc(100vw - 1rem);
+			max-height: calc(100dvh - 1rem);
+			overflow: auto;
+			line-height: 1.5;
+
+			/* CONTEXT: the popover IS a surface, so every control inside it lifts
+			   one step, exactly as in the dialog panel. Menu items take only the
+			   hover from this — they are transparent at rest by design. */
+			--vui-control-bg: var(--vui-surface-1);
+			--vui-control-foreground: var(--vui-surface-1-foreground);
+			--vui-control-bg-hover: var(--vui-surface-1-hover);
+			--vui-control-bg-active: var(--vui-surface-1-active);
+			--vui-control-border: var(--vui-surface-1-hover);
+
+			/* ANCHORED: the preferred side arrives as an inline position-area.
+			   When it would overflow, the browser tries these in order — the
+			   other side, the other alignment, both — and as a last resort a
+			   full-width row below (then above) with the popover centered in the
+			   viewport, which is where a box too wide for any anchor-aligned
+			   slot belongs. Ignored by a browser without anchor positioning. */
+			position-try-fallbacks:
+				flip-block,
+				flip-inline,
+				flip-block flip-inline,
+				--vui-popover-fit,
+				--vui-popover-fit flip-block;
+
+			/* in and out: a fade and a hair of scale. `display` and `overlay`
+			   transition discretely so the fade-out is visible and the box stays
+			   in the top layer while it plays. --vui-transition is 0ms under
+			   prefers-reduced-motion (base.css), which makes all of it instant. */
+			opacity: 1;
+			scale: 1;
+			transition:
+				opacity var(--vui-transition) ease-out,
+				scale var(--vui-transition) ease-out,
+				display var(--vui-transition) allow-discrete,
+				overlay var(--vui-transition) allow-discrete;
+		}
+		:scope:not(:popover-open) {
+			opacity: 0;
+			scale: 0.98;
+		}
+		@starting-style {
+			:scope:popover-open {
+				opacity: 0;
+				scale: 0.98;
+			}
+		}
+		/* a menu brings its own padding (.vui-menu, base.css) */
+		:scope[role="menu"] {
+			padding: 0;
+		}
+		/* wins over the base layer's `display` on a hidden control or item */
+		:scope [hidden] {
+			display: none;
+		}
+	}
+}
+/* the last-resort try option — an at-rule, so it cannot live inside @scope */
+@position-try --vui-popover-fit {
+	position-area: block-end span-all;
+	justify-self: center;
+}
+</style>
+
+<script type="module">
+	import {
+		createView,
+		delegate,
+		fromTemplate,
+		mount,
+		observable,
+	} from "@marianmeres/vanilla";
+
+	let seq = 0;
+
+	/** Fill a slot from a `Slot` value: text | element | view (mounted + tracked). */
+	function fill(track, slot, content) {
+		if (content == null) return;
+		if (typeof content === "string") slot.textContent = content;
+		else if (content instanceof Node) slot.replaceChildren(content);
+		else mount(track, slot, content);
+	}
+
+	/* placement → position-area, and the side the gap goes on. Logical keywords
+	   for the six vertical ones, so `start` / `end` follow the writing
+	   direction; physical for the two sides, which are named for what they are.
+	   The gap is a margin on the anchor-facing side ONLY: a margin all round
+	   would also push a start-aligned box off the anchor's edge by that much.
+	   (The try tactics swap margins along with everything else, so a flipped
+	   box keeps its gap.) */
+	const AREA = {
+		"bottom-start": ["block-end span-inline-end", "top"],
+		"bottom": ["block-end", "top"],
+		"bottom-end": ["block-end span-inline-start", "top"],
+		"top-start": ["block-start span-inline-end", "bottom"],
+		"top": ["block-start", "bottom"],
+		"top-end": ["block-start span-inline-start", "bottom"],
+		"left": ["left", "right"],
+		"right": ["right", "left"],
+	};
+
+	/** Does this browser place anchored boxes itself? All of it, or none of it. */
+	const anchorPositioning = () =>
+		typeof CSS !== "undefined" &&
+		CSS.supports("anchor-name", "--a") &&
+		CSS.supports("position-area", "block-end span-inline-end") &&
+		CSS.supports("position-try-fallbacks", "flip-block");
+
+	const ITEM = '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]';
+	/** An item the keyboard may land on: not disabled, and laid out. */
+	const enabled = (item) =>
+		!item.disabled &&
+		item.getAttribute("aria-disabled") !== "true" &&
+		item.offsetParent !== null;
+	/** The roles that make the anchor's aria-haspopup meaningful. */
+	const HASPOPUP = ["menu", "listbox", "tree", "grid", "dialog"];
+
+	export function createPopover({
+		anchor,
+		body,
+		placement = "bottom-start",
+		offset = 4,
+		role,
+		trigger = true,
+		closeOnSelect = true,
+		onOpen,
+		onClose,
+		onSelect,
+	} = {}) {
+		if (!(anchor instanceof Element)) {
+			throw new TypeError("vanilla-ui: createPopover() needs an `anchor` element");
+		}
+		return createView((track) => {
+			const el = fromTemplate("tpl-vui-popover");
+			const isOpen = observable(false);
+			const menu = role === "menu";
+			const anchored = anchorPositioning();
+			const open = () => el.matches(":popover-open");
+			el.id = `vui-popover-${++seq}`;
+			if (role) el.setAttribute("role", role);
+			if (menu && anchor.id) el.setAttribute("aria-labelledby", anchor.id);
+			// destroy() removes the node; removing an open popover hides it with no
+			// `toggle` event, so settle the observable ourselves.
+			track(() => isOpen.set(false));
+
+			fill(track, el, body);
+
+			/* ---- the anchor: aria, the anchor name, the invoker ---------------- */
+			const set = (name, value) => {
+				anchor.setAttribute(name, value);
+				track(() => anchor.removeAttribute(name));
+			};
+			set("aria-expanded", "false");
+			set("aria-controls", el.id);
+			if (HASPOPUP.includes(role)) set("aria-haspopup", role);
+
+			if (anchored) {
+				// name the anchor (keeping any name it already has), point the
+				// popover at it, say which side — and the browser does the rest,
+				// scroll, resize and reflow included
+				const name = `--${el.id}`;
+				const prev = anchor.style.anchorName;
+				anchor.style.anchorName = prev && prev !== "none" ? `${prev}, ${name}` : name;
+				track(() => (anchor.style.anchorName = prev));
+				const [area, gapSide] = AREA[placement] ?? AREA["bottom-start"];
+				el.style.positionAnchor = name;
+				el.style.positionArea = area;
+				el.style[`margin${gapSide[0].toUpperCase()}${gapSide.slice(1)}`] = `${offset}px`;
+			} else {
+				// the JS placement owns the insets; make sure no try-fallback moves
+				// them around behind its back on a browser that half-supports this
+				el.style.positionTryFallbacks = "none";
+			}
+
+			if (trigger) {
+				if ("popoverTargetElement" in anchor) {
+					// a <button> / <input>: the platform's own invoker relationship
+					anchor.popoverTargetElement = el;
+					track(() => (anchor.popoverTargetElement = null));
+				} else {
+					// anything else: a click listener. showPopover({ source }) below
+					// tells a browser that knows it that this element is the invoker
+					// (light-dismiss exemption, nesting); one that does not may close
+					// on pointerdown and see this click as "open again" — the
+					// pointerdown snapshot turns that into the "close" it meant.
+					let openAtDown = false;
+					const down = () => (openAtDown = open());
+					const click = () => {
+						const wasOpen = openAtDown || open();
+						openAtDown = false;
+						wasOpen ? api.close() : api.open();
+					};
+					anchor.addEventListener("pointerdown", down);
+					anchor.addEventListener("click", click);
+					track(() => {
+						anchor.removeEventListener("pointerdown", down);
+						anchor.removeEventListener("click", click);
+					});
+				}
+			}
+
+			/* ---- JS placement (no anchor positioning): measure, flip, clamp ---- */
+			const place = () => {
+				if (anchored || !open()) return;
+				const a = anchor.getBoundingClientRect();
+				// layout size, unaffected by the entry scale (a rect would be)
+				const w = el.offsetWidth, h = el.offsetHeight;
+				const vw = window.innerWidth, vh = window.innerHeight;
+				const edge = 8;
+				let [side, align] = placement.split("-");
+				if (align && getComputedStyle(el).direction === "rtl") {
+					align = align === "start" ? "end" : "start";
+				}
+				// the preferred side, unless it has no room and the other one has
+				const fits = {
+					top: a.top - offset - h >= edge,
+					bottom: a.bottom + offset + h <= vh - edge,
+					left: a.left - offset - w >= edge,
+					right: a.right + offset + w <= vw - edge,
+				};
+				const other = { top: "bottom", bottom: "top", left: "right", right: "left" };
+				if (!fits[side] && fits[other[side]]) side = other[side];
+				let top, left;
+				if (side === "top" || side === "bottom") {
+					top = side === "bottom" ? a.bottom + offset : a.top - offset - h;
+					left = align === "start"
+						? a.left
+						: align === "end"
+						? a.right - w
+						: a.left + (a.width - w) / 2;
+				} else {
+					left = side === "right" ? a.right + offset : a.left - offset - w;
+					top = a.top + (a.height - h) / 2;
+				}
+				// and on screen, whatever it takes (the anchored path's last resort)
+				left = Math.max(edge, Math.min(left, vw - w - edge));
+				top = Math.max(edge, Math.min(top, vh - h - edge));
+				el.style.inset = "auto";
+				el.style.top = `${top}px`;
+				el.style.left = `${left}px`;
+			};
+			// while open, follow the anchor through scrolls and resizes
+			let unfollow;
+			const follow = () => {
+				if (anchored || unfollow) return;
+				addEventListener("scroll", place, { capture: true, passive: true });
+				addEventListener("resize", place, { passive: true });
+				unfollow = () => {
+					removeEventListener("scroll", place, { capture: true });
+					removeEventListener("resize", place);
+					unfollow = undefined;
+				};
+			};
+			track(() => unfollow?.());
+
+			/* ---- menu items --------------------------------------------------- */
+			const items = () => (menu ? [...el.querySelectorAll(ITEM)].filter(enabled) : []);
+			const itemOf = (e) => {
+				const item = e.target.closest?.(ITEM);
+				return item && el.contains(item) && enabled(item) ? item : null;
+			};
+
+			/** Mirror the open state everywhere it shows. Idempotent: it runs from
+			 *  open()/close() synchronously and again from the native `toggle`,
+			 *  which is the one source of truth (light dismiss, Esc, the invoker
+			 *  and a bare togglePopover() all arrive there and nowhere else). */
+			const settle = (isNowOpen) => {
+				isOpen.set(isNowOpen);
+				anchor.setAttribute("aria-expanded", String(isNowOpen));
+				if (isNowOpen) {
+					place();
+					follow();
+					if (menu && !el.contains(document.activeElement)) items()[0]?.focus();
+				} else {
+					unfollow?.();
+				}
+			};
+
+			const api = {
+				el,
+				anchor,
+				isOpen,
+				open() {
+					if (open()) return;
+					if (!el.isConnected) anchor.after(el);
+					// `source`: the invoker, for browsers that take it (nesting, light
+					// dismiss); older ones ignore the argument
+					el.showPopover({ source: anchor });
+					settle(true);
+				},
+				close() {
+					if (!open()) return;
+					el.hidePopover(); // → native `toggle` (async) → `toggled`
+					settle(false);
+				},
+				toggle() {
+					open() ? api.close() : api.open();
+				},
+			};
+
+			// the native invoker needs its target in the document before the first
+			// click — the one factory in the kit that places its own element
+			if (anchor.isConnected) anchor.after(el);
+
+			// The root itself carries data-on for its own (non-bubbling) `toggle`;
+			// the rest bubble up from the items. delegate listens on the root, so it
+			// sees all of them — and none from a nested data-scope, by design.
+			track(
+				delegate(el, {
+					toggled: (e) => {
+						const isNowOpen = e.newState === "open";
+						settle(isNowOpen);
+						(isNowOpen ? onOpen : onClose)?.();
+						el.dispatchEvent(
+							new CustomEvent(isNowOpen ? "vui:open" : "vui:close", {
+								bubbles: true,
+								detail: { anchor },
+							}),
+						);
+					},
+					click: (e) => {
+						const item = menu && itemOf(e);
+						if (!item) return;
+						const value = item.getAttribute("value") ?? item.dataset.value ??
+							item.textContent.trim();
+						onSelect?.(value, item);
+						el.dispatchEvent(
+							new CustomEvent("vui:select", {
+								bubbles: true,
+								detail: { value, item },
+							}),
+						);
+						if (closeOnSelect) api.close();
+					},
+					keydown: (e) => {
+						if (!menu) return;
+						const list = items();
+						if (!list.length) return;
+						const i = list.indexOf(document.activeElement);
+						const go = (n) => {
+							e.preventDefault();
+							list[(n + list.length) % list.length].focus();
+						};
+						switch (e.key) {
+							case "ArrowDown":
+								return go(i < 0 ? 0 : i + 1);
+							case "ArrowUp":
+								return go(i < 0 ? -1 : i - 1);
+							case "Home":
+								return go(0);
+							case "End":
+								return go(-1);
+							case "Tab":
+								// the platform hands focus back to the anchor on hide;
+								// the untouched default action then moves on from there
+								return api.close();
+							case " ":
+								// Space activates a <button> natively; anything else, by hand
+								if (i >= 0 && !(list[i] instanceof HTMLButtonElement)) {
+									e.preventDefault();
+									list[i].click();
+								}
+						}
+					},
+					// keyboard and pointer agree on which item is current
+					hover: (e) => {
+						const item = menu && itemOf(e);
+						if (item && item !== document.activeElement) {
+							item.focus({ preventScroll: true });
+						}
+					},
+				}),
+			);
+
+			return api;
+		});
+	}
+</script>
