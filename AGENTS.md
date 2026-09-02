@@ -17,6 +17,7 @@ vanilla-JS prototyping; published to JSR + npm.
 
 ```
 src/mod.ts                — typed index: re-exports vanilla, COMPONENTS_BASE, loadAll/load<Name>, types
+components/base.css       — the base layer: token vocabulary + control primitives (NOT a component)
 components/<name>.html    — ONE component per file: <template> + @scope'd <style> + inline module
 dist/mod.js               — built index (deno task build); tracked; import-map target
 gallery/index.html        — every component, every state, every theme; import map example
@@ -37,14 +38,21 @@ README.md · API.md        — human docs
 2. **Component anatomy is a contract** (enforced by `tests/components.test.ts`): file
    `components/<name>.html`; template `id="tpl-vui-<name>"`; template root has
    `class="vui-<name>"` **and** `data-scope="<name>"`; `<style>` rules wrapped in
-   `@scope (.vui-<name>) { … }`; exactly one `<script type="module">` that imports vanilla by
-   **bare specifier** only and exports `create<Name>(props)`.
+   `@layer vui.components { @scope (.vui-<name>) { … } }`; exactly one `<script type="module">`
+   that imports vanilla by **bare specifier** only and exports `create<Name>(props)`. The lint
+   also fails raw `--vui-color-*` reads, unknown `--vui-*` names, color literals outside a
+   `var()` fallback, and any paint declared on a control selector (see 4 and 9).
 3. **`data-scope` on every root.** It is vanilla's component boundary; without it nested
    components collide on `data-ref` names and `data-on` actions.
-4. **Theming = tokens with fallbacks.** Read `--vui-color-*` (design-tokens, prefix `vui-`) via
-   local aliases with **system-color fallbacks** (`Canvas`, `CanvasText`, `GrayText`,
-   `Highlight`), so a component renders correctly with no theme loaded. Never Tailwind /
-   utility classes in templates.
+4. **Theming goes through the base vocabulary.** `components/base.css` reads every
+   `--vui-color-*` token **once** and republishes it under **the token's name minus `color-`**
+   with its canonical system-color fallback (`--vui-surface`, `--vui-surface-foreground`,
+   `--vui-border`, `--vui-ring`, …; `foreground` is never abbreviated). Structural tokens sit
+   beside them in tiers: `--vui-radius` / `-button` / `-container`, `--vui-shadow` / `-overlay`
+   / `-dialog`, `--vui-border-width`, `--vui-transition`. A component aliases those
+   (`--_bg: var(--vui-surface, Canvas)`) — never a raw token, never a name base doesn't
+   declare. Add to the vocabulary rather than reaching around it. Never Tailwind / utility
+   classes in templates.
 5. **Events out, two ways.** Callback props (`onClose`) **and** a bubbling `CustomEvent` on the
    root named `vui:<event>` with a `detail` object.
 6. **Containers take `Slot`s** (`string` → textContent, `HTMLElement` → placed, `ViewInstance`
@@ -53,17 +61,37 @@ README.md · API.md        — human docs
    behavior. If a primitive would need keyed list diffing, defer it (see DESIGN §6).
 8. **Types live in `src/mod.ts`.** Components are plain JS; declare `<Name>Props`,
    `<Name>View`, `Create<Name>`, add `load<Name>()`, and extend `VanillaUi` + `loadAll()`.
-9. **One copy of vanilla.** `src/mod.ts` re-exports the base library so a host maps both bare
-   specifiers to `dist/mod.js`. Don't import vanilla from anywhere but that specifier.
+9. **Controls belong to the base layer, never to a component.** Buttons and inputs are styles,
+   not components (DESIGN §D9): `.vui-btn` + the five design-tokens roles
+   (`--primary|accent|destructive|warning|success`) + `--ghost|--icon`, `.vui-input`,
+   `.vui-field`, `.vui-row` in `components/base.css`, plus a zero-specificity
+   default so a **bare `<button>` inside any vui component** (a consumer's slot content) is
+   styled too. A component may position a control; it may not paint one — to adapt controls to
+   its surface it re-declares the **context channel**
+   (`--vui-control-bg|-foreground|-bg-hover|-bg-active|-border`, and the sizes
+   `-min-height|-py|-px|-size`) **on itself** and lets them inherit — which is also all a button
+   variant is, so a new role is five custom properties and no new rule. The channel is never
+   declared at `:root` (its defaults are `var()` fallbacks at the usage sites, resolved at the
+   control — a `:root` declaration would substitute eagerly and ignore the container); the lint
+   enforces that too. Every component `<style>` is wrapped in `@layer vui.components` so a
+   consumer's unlayered CSS wins without a specificity fight. `button(text, opts)` in the index
+   builds one in JS; it returns an element, not a view.
+10. **One copy of vanilla.** `src/mod.ts` re-exports the base library so a host maps both bare
+    specifiers to `dist/mod.js`. Don't import vanilla from anywhere but that specifier.
 
 ## Adding a Component
 
-1. Create `components/<name>.html` following the anatomy in Convention 2 (copy `dialog.html`).
-2. Add types + `load<Name>()` to `src/mod.ts`; extend `VanillaUi` and `loadAll()`.
+1. Create `components/<name>.html` following the anatomy in Convention 2 (copy `dialog.html`):
+   `<style>` wrapped in `@layer vui.components { @scope (.vui-<name>) { … } }`, colors from the
+   base vocabulary, no control painting (Convention 9).
+2. Add types + `load<Name>()` to `src/mod.ts` (`await loadStyles(base)` first); extend
+   `VanillaUi` and `loadAll()`.
 3. Add `tests/browser/<name>.html` (copy `dialog.html`): one `ok`/`FAIL` line per check into
    `#result`, `DONE` last. Wait for native async events (a dialog's `close`) with a listener,
    never a timer.
 4. Add a `<section class="component" id="<name>">` to `gallery/index.html` covering every state.
+   Use `.vui-btn` / `.vui-row` for any control it needs — the gallery defines no control styles
+   of its own on purpose (it must test what ships).
 5. `deno task test` (anatomy) · `deno task build` · `deno task test:browser` (behavior) ·
    `deno task serve` and eyeball the gallery, light and dark, at least two themes.
 6. Document: README components table, API.md section (props, view, `returnValue`/events, CSS
@@ -72,6 +100,8 @@ README.md · API.md        — human docs
 ## Before Making Changes
 
 - [ ] Read [docs/DESIGN.md](./docs/DESIGN.md) — principles, anatomy, roadmap, non-goals.
+- [ ] Anything about buttons, inputs, colors or focus rings starts in `components/base.css` —
+      one vocabulary, one control look, enforced by `tests/components.test.ts` (DESIGN §D9).
 - [ ] Match `components/dialog.html` and the patterns in `src/mod.ts`.
 - [ ] `deno task test`, `deno task test:browser` and `deno check src/ tests/ scripts/` pass.
 - [ ] Component **behavior** is browser-only (blob-URL import + import map): the Deno unit tests
@@ -86,7 +116,9 @@ README.md · API.md        — human docs
 ## Documentation Index
 
 - [docs/DESIGN.md](./docs/DESIGN.md) — why shipped templates, tokens-with-fallbacks, `data-scope`,
-  events; component anatomy; roadmap; non-goals.
+  events, the base layer (§D9); component anatomy; roadmap; non-goals.
+- [components/base.css](./components/base.css) — the vocabulary and the control primitives; its
+  header comment is the reference for both.
 - [README.md](./README.md) — overview, usage, theming, gallery.
 - [API.md](./API.md) — loaders, per-component props / view / events / CSS variables.
 - [gallery/index.html](./gallery/index.html) — worked host page (import map, theme switching,

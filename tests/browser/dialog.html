@@ -21,6 +21,18 @@
 		</script>
 	</head>
 	<body>
+		<!-- a two-token fake theme: with no theme at all every fallback is a system
+		     color, and ButtonFace is exactly what a UA-styled <button> already has —
+		     so nothing below could tell "styled by the kit" from "not styled". -->
+		<style>
+		:root {
+			--vui-color-surface-1: rgb(1, 2, 3);
+			--vui-color-surface-1-foreground: rgb(4, 5, 6);
+			--vui-color-success: rgb(7, 8, 9);
+			--vui-color-success-foreground: rgb(10, 11, 12);
+		}
+		</style>
+
 		<pre id="result"></pre>
 
 		<!-- a nested child component whose action is ALSO named "close" -->
@@ -29,7 +41,14 @@
 		</template>
 
 		<script type="module">
-		import { createView, delegate, fromTemplate, loadAll } from "@marianmeres/vanilla-ui";
+		import {
+			BASE_STYLES_ID,
+			button,
+			createView,
+			delegate,
+			fromTemplate,
+			loadAll,
+		} from "@marianmeres/vanilla-ui";
 
 		const out = [];
 		const check = (name, cond, detail = "") =>
@@ -45,6 +64,33 @@
 			const { createDialog } = await loadAll();
 			check("styles adopted", !!document.querySelector("style[data-vanilla-src]"));
 			check("template adopted", !!document.getElementById("tpl-vui-dialog"));
+
+			/* ---- the base layer (components/base.css) ------------------------ */
+			const base = document.getElementById(BASE_STYLES_ID);
+			check("base styles installed", !!base);
+			// it declares `@layer vui.base, vui.components;` — that statement only
+			// orders the layers if it comes FIRST in document order
+			check(
+				"base styles precede the component styles",
+				!!(base.compareDocumentPosition(
+					document.querySelector("style[data-vanilla-src]"),
+				) &
+					Node.DOCUMENT_POSITION_FOLLOWING),
+			);
+			check(
+				"button(): classes",
+				button("x", { variant: "primary" }).className === "vui-btn vui-btn--primary",
+				button("x", { variant: "primary" }).className,
+			);
+			check("button(): type defaults to button", button("x").type === "button");
+			for (const v of ["primary", "accent", "destructive", "warning", "success", "ghost"]) {
+				const cls = button("x", { variant: v }).className;
+				check(`button(): variant ${v}`, cls === `vui-btn vui-btn--${v}`, cls);
+			}
+			let clicked = 0;
+			const probe = button("x", { onClick: () => clicked++ });
+			probe.click();
+			check("button(): onClick", clicked === 1);
 
 			/* ---- open, chrome, slots ---------------------------------------- */
 			const seen = [];
@@ -74,6 +120,104 @@
 					dlg.el.querySelector(".vui-dialog__title").id,
 			);
 			check("data-scope on root", dlg.el.dataset.scope === "dialog");
+
+			/* ---- controls are painted by the base layer, not by the dialog ---- */
+			const x = dlg.el.querySelector(".vui-dialog__close");
+			check("✕ is a base control", x.classList.contains("vui-btn"));
+			check("✕ is round (.vui-btn--icon)", getComputedStyle(x).borderRadius === "50%");
+			check("✕ has the base cursor", getComputedStyle(x).cursor === "pointer");
+			// the CONTEXT variable: the panel lifts every control inside it one step
+			check(
+				"panel declares --vui-control-bg",
+				getComputedStyle(dlg.el.querySelector(".vui-dialog__panel"))
+					.getPropertyValue("--vui-control-bg").trim() !== "",
+			);
+			// a BARE consumer button in a slot — no classes at all — is styled
+			const bareBtn = document.createElement("button");
+			bareBtn.textContent = "b";
+			dlg.el.querySelector(".vui-dialog__body").append(bareBtn);
+			const bareCs = getComputedStyle(bareBtn);
+			// inline-flex is the base layer's; a UA button is inline-block
+			check(
+				"bare <button> in a slot is laid out by the base layer",
+				bareCs.display === "inline-flex",
+				bareCs.display,
+			);
+			// and it takes the PANEL's context variables — the container hook, the
+			// context var and inheritance, all in one assertion
+			check(
+				"bare <button> in a slot takes the panel's --vui-control-bg",
+				bareCs.backgroundColor === "rgb(1, 2, 3)",
+				bareCs.backgroundColor,
+			);
+			check(
+				"bare <button> in a slot takes the panel's --vui-control-foreground",
+				bareCs.color === "rgb(4, 5, 6)",
+				bareCs.color,
+			);
+			check(
+				"✕ stays transparent (.vui-btn--ghost) on that same surface",
+				getComputedStyle(x).backgroundColor === "rgba(0, 0, 0, 0)",
+				getComputedStyle(x).backgroundColor,
+			);
+			bareBtn.remove();
+
+			// a variant is a context re-declaration ON THE BUTTON, so it beats the
+			// panel's context — and it resolves all the way from the design token
+			const okBtn = button("ok", { variant: "success" });
+			dlg.el.querySelector(".vui-dialog__body").append(okBtn);
+			const okCs = getComputedStyle(okBtn);
+			check(
+				"variant beats the container context (bg)",
+				okCs.backgroundColor === "rgb(7, 8, 9)",
+				okCs.backgroundColor,
+			);
+			check(
+				"variant beats the container context (fg)",
+				okCs.color === "rgb(10, 11, 12)",
+				okCs.color,
+			);
+			okBtn.remove();
+
+			/* ---- structural tiers + lazy context defaults --------------------- */
+			check(
+				"dialog uses the container radius tier (--vui-radius-container)",
+				getComputedStyle(dlg.el).borderRadius === "12px",
+				getComputedStyle(dlg.el).borderRadius,
+			);
+			// the context channel's defaults resolve AT THE CONTROL: a subtree that
+			// overrides a vocabulary name reaches the bare buttons inside it. With
+			// the defaults declared at :root this is impossible — they substitute
+			// their var()s there, eagerly, and the override never gets a look in.
+			const sub = document.createElement("div");
+			sub.className = "vui-row";
+			sub.style.setProperty("--vui-surface", "rgb(13, 14, 15)");
+			const subBtn = document.createElement("button");
+			subBtn.textContent = "s";
+			const subSel = document.createElement("select");
+			subSel.append(new Option("one"));
+			sub.append(subBtn, subSel);
+			document.body.append(sub);
+			const subCs = getComputedStyle(subBtn);
+			check(
+				"context defaults resolve at the control, not at :root",
+				subCs.backgroundColor === "rgb(13, 14, 15)",
+				subCs.backgroundColor,
+			);
+			// min-height is the alignment: on padding alone a <select> is 4px short
+			const bh = subBtn.getBoundingClientRect().height;
+			const sh = subSel.getBoundingClientRect().height;
+			check(
+				"<select> and <button> come out the same height",
+				Math.abs(bh - sh) < 0.5,
+				`${bh} vs ${sh}`,
+			);
+			check(
+				"controls transition on --vui-transition",
+				subCs.transitionDuration.startsWith("0.15s"),
+				subCs.transitionDuration,
+			);
+			sub.remove();
 
 			/* ---- every way to close -> one close, right returnValue ---------- */
 			let w = closed(dlg);
@@ -188,6 +332,23 @@
 			check("destroy(): root removed", !d2.el.isConnected);
 			check("destroy(): mounted child view removed too", !child.el.isConnected);
 			check("destroy(): isOpen false", d2.isOpen.get() === false);
+
+			/* ---- layers: a consumer's own (unlayered) CSS beats all of it ----- */
+			const probeStyle = document.createElement("style");
+			// an ELEMENT selector (0,0,1) against the base layer's `.vui-btn` (0,1,0):
+			// it can only win because layered styles lose to unlayered ones, never on
+			// specificity — so this passes if and only if the layering works
+			probeStyle.textContent = "button { padding: 33px; }";
+			document.head.append(probeStyle);
+			const pb = button("p");
+			document.body.append(pb);
+			check(
+				"unlayered consumer CSS beats the base layer (layers, not specificity)",
+				getComputedStyle(pb).padding === "33px",
+				getComputedStyle(pb).padding,
+			);
+			pb.remove();
+			probeStyle.remove();
 
 			out.push("DONE");
 		} catch (e) {

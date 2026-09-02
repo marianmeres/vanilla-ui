@@ -275,18 +275,66 @@ var COMPONENTS_BASE = new URL("../components/", import.meta.url).href;
 function componentUrl(name, base = COMPONENTS_BASE) {
   return new URL(`${name}.html`, base).href;
 }
+var BASE_STYLES_ID = "vui-base";
+function baseStylesUrl(base = COMPONENTS_BASE) {
+  return new URL("base.css", base).href;
+}
+var _stylesLoad;
+function loadStyles(base = COMPONENTS_BASE) {
+  if (_stylesLoad) return _stylesLoad;
+  if (document.getElementById(BASE_STYLES_ID)) {
+    return _stylesLoad = Promise.resolve();
+  }
+  const url = baseStylesUrl(base);
+  _stylesLoad = fetch(url).then((r) => {
+    if (!r.ok) {
+      throw new Error(
+        `vanilla-ui: cannot load base styles (${r.status} ${url}). components/base.css ships with the kit \u2014 copy the whole folder, or pass the right base to loadAll()/loadStyles().`
+      );
+    }
+    return r.text();
+  }).then((css) => {
+    if (document.getElementById(BASE_STYLES_ID)) return;
+    const style = document.createElement("style");
+    style.id = BASE_STYLES_ID;
+    style.textContent = css;
+    document.head.prepend(style);
+  });
+  return _stylesLoad;
+}
+function button(label, opts = {}) {
+  const el = document.createElement("button");
+  el.type = opts.type ?? "button";
+  el.textContent = label;
+  el.className = [
+    "vui-btn",
+    opts.variant && opts.variant !== "default" ? `vui-btn--${opts.variant}` : "",
+    opts.icon ? "vui-btn--icon" : "",
+    opts.class ?? ""
+  ].filter(Boolean).join(" ");
+  if (opts.value != null) el.value = opts.value;
+  if (opts.disabled) el.disabled = true;
+  if (opts.ariaLabel) el.setAttribute("aria-label", opts.ariaLabel);
+  if (opts.onClick) el.addEventListener("click", opts.onClick);
+  return el;
+}
 async function loadDialog(base = COMPONENTS_BASE) {
+  await loadStyles(base);
   const mod = await loadComponent(componentUrl("dialog", base));
   return mod.createDialog;
 }
 async function loadAll(base = COMPONENTS_BASE) {
+  await loadStyles(base);
   const [createDialog] = await Promise.all([loadDialog(base)]);
   return { createDialog };
 }
 export {
+  BASE_STYLES_ID,
   COMPONENTS_BASE,
   MAX_UPDATE_DEPTH,
   applyBindings,
+  baseStylesUrl,
+  button,
   componentUrl,
   computed,
   createView,
@@ -296,6 +344,7 @@ export {
   loadAll,
   loadComponent,
   loadDialog,
+  loadStyles,
   loadTemplates,
   mount,
   observable,

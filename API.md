@@ -38,6 +38,61 @@ Load `components/dialog.html` alone and return its typed factory.
 
 ---
 
+### `loadStyles(base?)`
+
+Fetch `components/base.css` — the **base layer** — and install it as `<style id="vui-base">`,
+prepended to `<head>`. Idempotent, and a no-op if an element with that id is already in the
+document (put your own `<link rel="stylesheet" id="vui-base" …>` in the page to load it before
+first paint, or to replace it wholesale).
+
+Every `load*` function above awaits this already; call it directly only when you want the
+control primitives (`.vui-btn`, `.vui-input`, [`button()`](#buttonlabel-options)) on a page
+that loads no component. See [Base layer](#base-layer) for what it defines.
+
+**Parameters:**
+
+- `base` (`string`, optional) — as in `loadAll`.
+
+**Returns:** `Promise<void>`.
+
+---
+
+### `button(label, options?)`
+
+Build a `<button>` styled by the base layer. Not a view and not a component — a button has no
+behavior, so this is markup plus the same `.vui-btn` classes hand-written HTML would use. For
+footers and toolbars assembled in JS.
+
+**Parameters:**
+
+- `label` (`string`) — the button text (set as `textContent`).
+- `options` (`ButtonOptions`, optional)
+  - `variant` (`ButtonVariant`) — `"default"`, one of the five design-tokens roles
+    (`"primary"`, `"accent"`, `"destructive"`, `"warning"`, `"success"`), or `"ghost"`.
+    Default: `"default"`.
+  - `icon` (`boolean`) — square + round, for a single glyph. Default: `false`.
+  - `type` (`"button" | "submit" | "reset"`) — Default: `"button"`.
+  - `value` (`string`) — a `<form method="dialog">` submit's `value` becomes the dialog's
+    `returnValue`.
+  - `disabled` (`boolean`), `ariaLabel` (`string`), `class` (`string`, appended).
+  - `onClick` (`(e: MouseEvent) => void`) — plain listener; it dies with the element.
+
+**Returns:** `HTMLButtonElement`.
+
+**Example:**
+
+```ts
+const row = document.createElement("div");
+row.className = "vui-row";
+row.append(
+	button("Keep", { onClick: () => dlg.close("keep") }),
+	button("Delete", { variant: "destructive", onClick: () => dlg.close("delete") }),
+);
+const dlg = createDialog({ title: "Delete 3 items?", footer: row });
+```
+
+---
+
 ### `componentUrl(name, base?)`
 
 Absolute URL of one component file.
@@ -51,6 +106,18 @@ Absolute URL of one component file.
 
 ---
 
+### `baseStylesUrl(base?)`
+
+Absolute URL of the base stylesheet.
+
+**Parameters:**
+
+- `base` (`string`, optional) — as in `loadAll`.
+
+**Returns:** `string` — e.g. `…/components/base.css`.
+
+---
+
 ## Constants
 
 ### `COMPONENTS_BASE`
@@ -58,6 +125,157 @@ Absolute URL of one component file.
 `string` — Absolute URL of the `components/` directory, resolved as `../components/` relative
 to the index module's own URL (`src/mod.ts` in Deno, `dist/mod.js` in the browser). This is
 why the kit needs no path configuration when served as a folder.
+
+---
+
+### `BASE_STYLES_ID`
+
+`"vui-base"` — the id of the element [`loadStyles`](#loadstylesbase) injects, and the id to
+give your own element to pre-empt it.
+
+---
+
+## Base layer
+
+`components/base.css`, installed by [`loadStyles()`](#loadstylesbase). Not a component: no
+template, no factory. It is what makes every control in the kit — and every control a consumer
+drops into a slot — look like one kit. Rationale: [`docs/DESIGN.md` §D9](./docs/DESIGN.md).
+
+### Cascade layers
+
+The file opens with `@layer vui.base, vui.components;`. Everything it defines is in `vui.base`;
+every component's `@scope` block is in `vui.components`. **Your own CSS, unlayered, beats both**
+whatever its specificity — so overriding anything here needs no `!important` and no specificity
+games:
+
+```css
+button {
+	padding: 12px;
+} /* wins over .vui-btn */
+```
+
+### The vocabulary
+
+Every design token the kit reads is resolved here once, with a system-color fallback, so a page
+with **no theme** still renders correctly (and follows `color-scheme`). **The name is the
+token's name minus `color-`**: `--vui-color-surface-foreground` → `--vui-surface-foreground`.
+Same spelling as `@marianmeres/design-tokens` and `@marianmeres/stuic`, one rule to remember.
+Components read these names — never `--vui-color-*` directly. Override any of them on `:root`,
+or on a subtree.
+
+| Group   | Variables                                                                                                                                                              |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| page    | `--vui-background`, `--vui-foreground`                                                                                                                                 |
+| surface | `--vui-surface`, `--vui-surface-foreground`, `--vui-surface-hover`, `--vui-surface-1`, `--vui-surface-1-foreground`, `--vui-surface-1-hover`, `--vui-surface-1-active` |
+| text    | `--vui-muted`, `--vui-muted-foreground`                                                                                                                                |
+| roles   | `--vui-primary`, `--vui-accent`, `--vui-destructive`, `--vui-warning`, `--vui-success` — each also with `-foreground`, `-hover`, `-active`                             |
+| chrome  | `--vui-border`, `--vui-border-hover`, `--vui-input`, `--vui-input-hover`, `--vui-ring`, `--vui-scrim`                                                                  |
+
+The five **roles** are the `@marianmeres/design-tokens` semantic colors, each mapped straight
+through with its own hover / active / foreground token, so a generated theme drives all of them
+at once. Without a theme they fall back to a system pair where the platform has one
+(`AccentColor`, `Highlight`, `Mark`) and to a mix toward `CanvasText` where it does not.
+
+### Structural tokens
+
+Kit constants, not theme tokens — also on `:root`, also overridable globally or per subtree.
+Three tiers where one size does not fit: a rounded button and a rounded card are different
+roundings, a popover and a modal are different elevations.
+
+| Group  | Variables                                                                  | Defaults                        |
+| ------ | -------------------------------------------------------------------------- | ------------------------------- |
+| radius | `--vui-radius` (elements), `--vui-radius-button`, `--vui-radius-container` | `0.5rem` · `0.5rem` · `0.75rem` |
+| shadow | `--vui-shadow` (resting), `--vui-shadow-overlay`, `--vui-shadow-dialog`    | small · medium · large          |
+| border | `--vui-border-width`                                                       | `1px`                           |
+| layout | `--vui-gap`                                                                | `0.5rem`                        |
+| focus  | `--vui-focus-width`, `--vui-focus-offset`                                  | `2px` · `1px`                   |
+| motion | `--vui-transition` (a duration; `0ms` under `prefers-reduced-motion`)      | `150ms`                         |
+
+`:root { --vui-radius-button: 9999px }` makes every button a pill and touches nothing else.
+
+### Control context
+
+The `--vui-control-*` names are a **channel**, not a setting: nothing declares them by default.
+Every control reads them with its default in the fallback, resolved _at the control_ —
+`background: var(--vui-control-bg, var(--vui-surface))` — and anything above it that wants to
+restyle the controls inside it just re-declares them on itself. (They are deliberately not
+declared at `:root`: a `:root` declaration substitutes its `var()`s eagerly, right there, so a
+container that set three of the five would inherit a fourth already baked to the page's colors.
+The fallback pattern is the one `@marianmeres/stuic` uses for the same reason.)
+
+| Channel                    | Default                                                            |
+| -------------------------- | ------------------------------------------------------------------ |
+| `--vui-control-bg`         | `--vui-surface`                                                    |
+| `--vui-control-foreground` | `--vui-surface-foreground`                                         |
+| `--vui-control-bg-hover`   | `--vui-surface-hover`                                              |
+| `--vui-control-bg-active`  | a hair of `currentColor` over the hover color                      |
+| `--vui-control-border`     | `--vui-border`                                                     |
+| `--vui-control-min-height` | `2.5rem` — what makes a `<select>` the same height as a `<button>` |
+| `--vui-control-py` / `-px` | `0.45rem` / `0.9rem`                                               |
+| `--vui-control-size`       | `2rem` — square (icon) controls                                    |
+
+Sizes are in the channel too, so a dense toolbar can shrink every control inside it the way a
+panel lifts them. The dialog panel does exactly this to lift controls off its surface:
+
+```css
+.vui-dialog__panel {
+	--vui-control-bg: var(--vui-surface-1);
+	--vui-control-foreground: var(--vui-surface-1-foreground);
+	--vui-control-bg-hover: var(--vui-surface-1-hover);
+	--vui-control-bg-active: var(--vui-surface-1-active);
+	--vui-control-border: var(--vui-surface-1-hover);
+}
+```
+
+**A variant is the same thing, one element down.** `.vui-btn--success` declares no paint at
+all — it re-declares that context on the button itself, which is why it beats the container's
+(a success button in a dialog footer is green, not surface-1) and why every state comes out
+consistent without a rule per variant. Your own role works the same way, no kit change needed:
+
+```css
+.my-brand-btn {
+	--vui-control-bg: var(--brand);
+	--vui-control-foreground: var(--brand-foreground);
+	--vui-control-bg-hover: var(--brand-hover);
+	--vui-control-bg-active: var(--brand-active);
+	--vui-control-border: transparent;
+}
+```
+
+### Classes
+
+| Class                                                                          | What                                                       |
+| ------------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| `.vui-btn`                                                                     | the button primitive (`all: unset` + the control paint)    |
+| `.vui-btn--primary` / `--accent` / `--destructive` / `--warning` / `--success` | the five design-tokens roles, filled                       |
+| `.vui-btn--ghost`                                                              | no fill; borrows its container's foreground on hover       |
+| `.vui-btn--icon`                                                               | square + round, for a single glyph                         |
+| `.vui-input` / `.vui-select`                                                   | text inputs, selects, textareas                            |
+| `.vui-field`                                                                   | a stacked `<label>` + full-width control                   |
+| `.vui-row`                                                                     | a wrapping flex row at `--vui-gap` (button rows, toolbars) |
+
+### Bare markup inside a component
+
+Any element carrying a `vui-` class is a **container hook**: bare `<button>`, `<input>`,
+`<select>` and `<textarea>` descendants get the control look with no classes at all. So a
+`<form method="dialog">` dropped into a dialog body is styled, and takes that dialog's control
+context, without knowing the kit exists:
+
+```html
+<form method="dialog">
+	<div class="vui-field">
+		<label for="name">Your name</label>
+		<input id="name" name="name" />
+	</div>
+	<div class="vui-row" style="justify-content: flex-end">
+		<button type="submit" value="cancel">Cancel</button>
+		<button type="submit" value="save" class="vui-btn--primary">Save</button>
+	</div>
+</form>
+```
+
+That default has the reach of any reset — it is zero-specificity and layered, so your own CSS
+takes it back whenever you want it back.
 
 ---
 
@@ -106,10 +324,18 @@ header / body / footer chrome, a `returnValue` convention, and events out.
 | ----------- | ----------------- | ------------------------ |
 | `vui:close` | `{ returnValue }` | after the native `close` |
 
-**CSS variables read** (all with system-color fallbacks):
+**CSS variables read** (from the [base vocabulary](#the-vocabulary) and
+[structural tokens](#structural-tokens), each with a fallback):
 
-`--vui-color-surface`, `--vui-color-surface-foreground`, `--vui-color-surface-1` (hairlines),
-`--vui-color-muted-foreground`, `--vui-color-ring`, `--vui-radius`.
+`--vui-surface`, `--vui-surface-foreground`, `--vui-border`, `--vui-radius-container`,
+`--vui-shadow-dialog`, `--vui-scrim`, `--vui-gap`.
+
+**CSS variables set** — on `.vui-dialog__panel`, so every control inside the dialog (the ✕,
+footer buttons, anything in a slot) lifts off the panel's surface: `--vui-control-bg`,
+`--vui-control-foreground`, `--vui-control-bg-hover`, `--vui-control-bg-active`,
+`--vui-control-border`.
+
+The ✕ is `.vui-btn.vui-btn--ghost.vui-btn--icon` — a base control, not a private button.
 
 **Example:**
 
@@ -118,7 +344,7 @@ const dlg = createDialog({
 	title: "Delete 3 items?",
 	body: "This cannot be undone.",
 	closeOnBackdrop: false,
-	footer: buttons, // an element holding <button>s that call dlg.close("delete") etc.
+	footer: row, // an element holding buttons — see button() above
 	onClose: (v) => v === "delete" && store.deleteSelected(),
 });
 document.body.append(dlg.el);
@@ -143,6 +369,30 @@ type Slot = string | HTMLElement | ViewInstance;
 
 Content for a container's slot. `string` is **text** (`textContent`, never HTML); an element
 is placed as-is; a view is `mount`ed so the container's `destroy()` tears it down too.
+
+### `ButtonVariant` / `ButtonOptions`
+
+```ts
+type ButtonVariant =
+	| "default"
+	| "primary"
+	| "accent"
+	| "destructive"
+	| "warning"
+	| "success"
+	| "ghost";
+
+interface ButtonOptions {
+	variant?: ButtonVariant; // default "default"
+	icon?: boolean; // square + round
+	type?: "button" | "submit" | "reset"; // default "button"
+	value?: string;
+	disabled?: boolean;
+	ariaLabel?: string;
+	class?: string;
+	onClick?: (e: MouseEvent) => void;
+}
+```
 
 ### `DialogProps`
 

@@ -5,7 +5,7 @@
     "jsr:@deno/emit@0.46": "0.46.0",
     "jsr:@luca/esbuild-deno-loader@~0.11.1": "0.11.1",
     "jsr:@marianmeres/deno-build@*": "2.2.0",
-    "jsr:@marianmeres/design-tokens@^1.17.0": "1.17.0",
+    "jsr:@marianmeres/design-tokens@^1.18.0": "1.18.0",
     "jsr:@marianmeres/npmbuild@^1.16.0": "1.16.0",
     "jsr:@marianmeres/release@*": "2.0.0",
     "jsr:@marianmeres/vanilla@^1.9.0": "1.9.0",
@@ -24,8 +24,7 @@
     "jsr:@std/fs@^1.0.23": "1.0.24",
     "jsr:@std/fs@^1.0.24": "1.0.24",
     "jsr:@std/html@^1.0.7": "1.0.7",
-    "jsr:@std/http@*": "1.1.3",
-    "jsr:@std/http@1": "1.1.3",
+    "jsr:@std/http@^1.1.3": "1.1.3",
     "jsr:@std/internal@^1.0.12": "1.0.14",
     "jsr:@std/internal@^1.0.14": "1.0.14",
     "jsr:@std/io@0.223": "0.223.0",
@@ -76,8 +75,8 @@
         "npm:esbuild"
       ]
     },
-    "@marianmeres/design-tokens@1.17.0": {
-      "integrity": "33d50bfaeafb72ea85eaa2740314c8bc31eef3c799d947afbcd50cc581a00d95"
+    "@marianmeres/design-tokens@1.18.0": {
+      "integrity": "4f81e851faf51c429b1556b5b9cc2d767613abd754b97b897aa2fbb00f759e0e"
     },
     "@marianmeres/npmbuild@1.16.0": {
       "integrity": "5631b65d284472d1325ecf829dce22e2df166fa3b754cd3f005c8eccd05ee8f0",
@@ -458,13 +457,13 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@marianmeres/design-tokens@^1.17.0",
+      "jsr:@marianmeres/design-tokens@^1.18.0",
       "jsr:@marianmeres/npmbuild@^1.16.0",
       "jsr:@marianmeres/vanilla@^1.9.0",
       "jsr:@std/assert@^1.0.19",
       "jsr:@std/fs@^1.0.24",
-      "jsr:@std/http@1",
-      "jsr:@std/path@^1.1.5",
+      "jsr:@std/http@^1.1.3",
+      "jsr:@std/path@^1.1.6",
       "npm:linkedom@~0.18.13"
     ]
   }

@@ -1,7 +1,20 @@
 Reusable UI primitives on top of @marianmeres/vanilla, shipped as single-file .html components
 (a <template>, a CSS @scope'd <style>, and the factory in an inline module script) loaded at
 runtime with loadComponent — no build step, just serve. Every component root carries data-scope
-so components nest without ref/action collisions; styling reads @marianmeres/design-tokens
-variables (prefix "vui-") with system-color fallbacks; events go out as "vui:*" CustomEvents plus
-callback props. The typed index (src/mod.ts) re-exports vanilla, resolves component URLs from its
-own location, and exposes loadAll()/load<Name>(). First primitive: dialog on the native <dialog>.
+so components nest without ref/action collisions; events go out as "vui:*" CustomEvents plus
+callback props. Under the components sits one base layer (components/base.css, installed by
+loadStyles): it reads the @marianmeres/design-tokens variables (prefix "vui-") once into a
+vocabulary named token-minus-"color-" (--vui-surface-foreground) with system-color fallbacks,
+adds structural tokens in stuic's tiers (radius element/button/container, shadow
+resting/overlay/dialog, border-width, transition), and defines the control primitives — .vui-btn
+with the five design-tokens semantic roles (primary, accent, destructive, warning, success,
+each with hover/active/foreground) plus --ghost and --icon, .vui-input, .vui-field, .vui-row,
+the focus ring — which also apply to bare <button> and <input> markup inside any component, so
+slot content looks right with no classes. Buttons are styles, not components (button() builds
+one as a plain element). Everything is in the vui.base / vui.components cascade layers, so
+unlayered consumer CSS overrides it for free. Containers AND variants both work by re-declaring
+the --vui-control-* channel (colors and sizes) on themselves, so a new role is five custom
+properties and no new rule; the channel's defaults are var() fallbacks at the usage sites, never
+:root declarations, so they resolve at the control. The
+typed index (src/mod.ts) re-exports vanilla, resolves URLs from its own location, and exposes
+loadAll()/load<Name>()/loadStyles(). First primitive: dialog on the native <dialog>.

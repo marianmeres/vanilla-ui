@@ -22,13 +22,13 @@ component library for strangers (see §6 for what that would change).
 
 ### Scope
 
-**In:** shipped single-file components (template + scoped style + factory), a typed index
-that loads them, design-tokens theming with graceful fallbacks, nesting via `data-scope`,
-events out, a gallery.
+**In:** shipped single-file components (template + scoped style + factory), one shared base
+layer (the token vocabulary + the control primitives), a typed index that loads them,
+design-tokens theming with graceful fallbacks, nesting via `data-scope`, events out, a gallery.
 
 **Out (deliberately):** a headless/behavior-only layer, custom elements, a keyed-list
 reconciler, automatic style scoping, Tailwind in templates, a slot/children system beyond
-`Slot`. See §6.
+`Slot`, a button _component_. See §6.
 
 ---
 
@@ -49,12 +49,18 @@ the document**, so a page that declares its own `tpl-vui-dialog` before `loadAll
 ### D2 — Tokens with fallbacks, never a CSS framework
 
 Components read `@marianmeres/design-tokens` variables under the **`vui-`** prefix, through
-local aliases that fall back to **system colors**:
+local aliases that fall back to **system colors**. Since D9 the token is read once — in
+`components/base.css`, which resolves it into a short name — and a component aliases _that_,
+keeping a last-ditch system color so the file still renders if it is ever loaded bare:
 
 ```css
+/* components/base.css — the name is the token's name minus `color-` */
+:root {
+	--vui-surface: var(--vui-color-surface, Canvas);
+}
+/* components/<name>.html */
 :scope {
-	--_bg: var(--vui-color-surface, Canvas);
-	--_fg: var(--vui-color-surface-foreground, CanvasText);
+	--_bg: var(--vui-surface, Canvas);
 }
 ```
 
@@ -124,6 +130,92 @@ chrome plus keyboard/aria glue. Primitives that need **keyed list rendering** (s
 combobox) would push vanilla toward a reconciler it deliberately does not have — they come
 last, and only with a design discussion first.
 
+### D9 — One base layer: the vocabulary and the controls
+
+A dialog needs buttons. So will the menu, the toast, and every consumer form dropped into a
+slot. Before this they lived in three places — the ✕'s private rules inside
+`@scope (.vui-dialog)`, the gallery's global `button { … }`, and _nothing at all_ for the
+`<button value="save">` a consumer writes in a `<form method="dialog">`. So a footer looked
+right in the gallery and unstyled in a real prototype (the gallery was doing the kit's job),
+and the three homes had already started to drift: one hairline idea with two different
+fallbacks, the focus ring typed out twice.
+
+`components/base.css` is the answer, and it is deliberately **not a component**: no template,
+no script, no `data-scope`. `loadStyles()` — awaited by every `load<Name>()` — injects it once
+as `<style id="vui-base">`, prepended to `<head>`. It holds exactly two things.
+
+**1. The vocabulary.** Every `--vui-color-*` token the kit reads is resolved here, once, under
+**the token's own name minus `color-`** with its canonical system-color fallback
+(`--vui-surface`, `--vui-surface-foreground`, `--vui-border`, `--vui-ring`, …). Components alias
+those names, never the raw tokens. One idea, one fallback, one file — and one rule to remember,
+with the same spelling `design-tokens` and `stuic` use (`foreground` is never abbreviated; `bg`
+only ever appears as a context-channel suffix, which is stuic's convention too). Next to the
+colors sit the **structural tokens**, taken from stuic's tiering: radius and shadow in three
+tiers each (element / button / container; resting / overlay / dialog), `--vui-border-width`,
+`--vui-transition`. The dialog is a container and casts a dialog shadow; a button is a button;
+the popover on the roadmap will be an overlay. One size does not fit.
+
+**2. The controls.** A button is a **style** primitive, not a component. It has no behavior, so
+it would drag `createView` / `track` / `destroy` / `data-scope` onto a leaf that needs none of
+them — and a factory can only style markup it creates, which is exactly the markup a consumer's
+slot content is not. CSS reaches both. Two ways in:
+
+```html
+<button class="vui-btn vui-btn--primary">anywhere on the page</button>
+<button>bare, inside any vui component</button>
+```
+
+The second is a zero-specificity default on a _container hook_: `:where([class^="vui-"],
+[class*=" vui-"]) :where(button, …)` — "a descendant of an element carrying a `vui-` class".
+Deliberately not `[data-scope]`: that is vanilla's boundary, and the kit has no business
+styling every vanilla component's buttons. `button()` in the index builds the class form for
+footers assembled in JS — markup plus the same classes, not a view, not a second look.
+
+Three mechanisms make it hold together:
+
+- **Cascade layers, not specificity.** `@layer vui.base, vui.components;` (declared by base.css,
+  which is why it must be loaded first); every component's `@scope` block sits in
+  `vui.components`. Layered rules lose to unlayered ones whatever their specificity, so a
+  consumer's plain `button { … }` beats all of it — override is free, no `!important`, no arms
+  race. This is D1's "consumer override comes for free" applied to CSS.
+- **A context channel, not descendant selectors.** A container never reaches into a control
+  (`.vui-dialog__footer button { … }` is the anti-pattern — every future container has to
+  repeat it and get it right). It re-declares `--vui-control-bg` / `-foreground` / `-bg-hover`
+  / `-bg-active` / `-border` (and the sizes: `-min-height`, `-py`, `-px`) **on itself**, and
+  controls inherit. The dialog panel lifts everything inside it to `surface-1` in five lines:
+  its own ✕, footer buttons built by `button()`, and a consumer's bare `<form>` buttons alike —
+  and it composes through nesting.
+
+  The channel's defaults are **not** declared at `:root`; they live in `var()` fallbacks at the
+  usage sites (`background: var(--vui-control-bg, var(--vui-surface))`). This is stuic's rule
+  ("never declare a derived token at `:root`"), and it is not a style preference: a `:root`
+  declaration substitutes its `var()`s eagerly, on `:root`, so a container that re-declared
+  three of the five would inherit a fourth already baked to the page's colors — measured, in
+  this kit, before the rule was adopted. Resolved at the control instead, every override above
+  it has already been applied. (The vocabulary itself stays at `:root` on purpose: it is the
+  resolve-once layer. Override the vocabulary name on a subtree, not the raw token.)
+
+  **A variant is the same move, one element down.** `.vui-btn--success` declares no paint: it
+  re-declares that context on the button. Which means the five `design-tokens` semantic roles
+  (primary, accent, destructive, warning, success — each with its own hover/active/foreground
+  token) cost five custom properties each and no rule of their own; every state stays
+  consistent because the one base rule is still doing the painting; a variant beats the
+  container it sits in, because a declaration on the element beats an inherited one; and a
+  consumer's own role is the same five lines on a class the kit has never heard of. `--ghost`
+  is the exception that proves it — not a role but a treatment, so it keeps one explicit
+  `color` to borrow the container's foreground on hover.
+- **Enforcement, not memory.** `tests/components.test.ts` fails a component that reads a
+  `--vui-color-*` token directly, reads or sets a `--vui-*` name base.css does not declare,
+  hard-codes a color outside a `var()` fallback, or sets a paint property (background, border,
+  padding, color, font, box-shadow, outline, cursor) on a selector targeting a control. A
+  component may _lay out_ a control; it may never paint one.
+
+**What it costs.** The element default is a reset with the reach of any reset: a consumer's own
+`<button>` inside a dialog is restyled unless they opt out (their own unlayered CSS, or their
+own `#vui-base` element). For this audience — prototypes, where a slot that looks right with
+zero classes is the entire point — that is a good trade. It would not be for a public library
+styling other people's markup.
+
 ---
 
 ## 3. Anatomy of a component (the contract)
@@ -138,9 +230,11 @@ last, and only with a design discussion first.
 </template>
 
 <style>
-	@scope (.vui-<name>) {
-		:scope { --_bg: var(--vui-color-…, <system color>); … }
-		…
+	@layer vui.components {
+		@scope (.vui-<name>) {
+			:scope { --_bg: var(--vui-<vocabulary name>, <system color>); … }
+			…
+		}
 	}
 </style>
 
@@ -157,11 +251,16 @@ last, and only with a design discussion first.
 ```
 
 Rules the test enforces: template ids start with `tpl-vui-`; the root has both the class and
-`data-scope`; every `<style>` is `@scope`d to the root class; exactly one module script; it
-imports vanilla by bare specifier and nothing by relative path; it exports `create<Name>`; it
-never assigns `innerHTML`.
+`data-scope`; every `<style>` is `@scope`d to the root class **and** wrapped in
+`@layer vui.components`; every `--vui-*` it reads or sets is in `components/base.css`'s
+vocabulary (and no raw `--vui-color-*` token is read); no color literal outside a `var()`
+fallback; no paint property on a selector targeting a control (D9); exactly one module script;
+it imports vanilla by bare specifier and nothing by relative path; it exports `create<Name>`;
+it never assigns `innerHTML`.
 
-Rules the test cannot enforce (review them): props are the single argument with defaults;
+Rules the test cannot enforce (review them): a control's _placement_ is fair game but its look
+is base's (the lint only sees selectors that name a control — `.vui-dialog__close { padding }`
+would slip through); props are the single argument with defaults;
 every subscription/listener is `track`ed; the root's _own_ non-bubbling events (a dialog's
 `close`/`cancel`) go on the root's `data-on` — vanilla's `delegate` listens on the root, so it
 sees them; events out are `vui:<event>` **and** a callback prop; colors come from `--vui-*`
@@ -209,6 +308,11 @@ In this order — each one mostly platform:
 
 - **No headless layer.** Adding one means every component exists twice (behavior + reference
   markup). Only worth it if the kit becomes a public library for other people's markup.
+- **No button component.** Controls are styles (D9) — `components/base.css` plus a
+  `button()` element helper. A `createButton()` view would double the sources of truth for what
+  a button looks like and still miss every button the consumer writes into a slot. Only worth
+  revisiting if a control ever grows real behavior (a menu button's aria wiring, say) — and then
+  it is a component _around_ the classes, never instead of them.
 - **No custom elements.** Light-DOM custom elements wrapping these factories would give
   attribute props and framework-agnostic use — a reasonable _outer shell_ later, never the
   foundation (it complicates the `enhance` story and adds a concept).

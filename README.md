@@ -11,8 +11,10 @@ serve.** Built for vanilla-JS prototyping: mount a dialog and it looks right imm
 any [`design-tokens`](https://jsr.io/@marianmeres/design-tokens) theme, light or dark.
 
 Every component leans on the platform first (native `<dialog>`, the Popover API, `<details>`)
-and adds only chrome, keyboard/aria glue, and a small typed API. The rationale is in
-[`docs/DESIGN.md`](./docs/DESIGN.md).
+and adds only chrome, keyboard/aria glue, and a small typed API. Underneath them all sits one
+small **base layer** (`components/base.css`) holding the token vocabulary and the control
+primitives — buttons, inputs, the focus ring — so nothing in the kit can drift apart. The
+rationale is in [`docs/DESIGN.md`](./docs/DESIGN.md).
 
 ## Components
 
@@ -53,9 +55,11 @@ so the components and the page share a single copy of vanilla) and **one `await`
 </script>
 
 <template id="tpl-signup">
+	<!-- inside a vui component, controls need no classes to look right;
+	     vui-btn--primary here is only the emphasis -->
 	<form method="dialog">
 		<input name="name" autofocus />
-		<button value="save">Save</button>
+		<button value="save" class="vui-btn--primary">Save</button>
 	</form>
 </template>
 
@@ -92,18 +96,52 @@ import { createView, loadAll, observable } from "@marianmeres/vanilla-ui";
 
 ## Theming
 
-Components read [`@marianmeres/design-tokens`](https://jsr.io/@marianmeres/design-tokens)
-variables with the prefix **`vui-`** (`--vui-color-surface`, `--vui-color-border`, …) and fall
-back to **system colors** (`Canvas`, `CanvasText`, `Highlight`) when they're absent. So:
+The base layer reads [`@marianmeres/design-tokens`](https://jsr.io/@marianmeres/design-tokens)
+variables with the prefix **`vui-`** (`--vui-color-surface`, `--vui-color-border`, …) — once,
+in one file — and republishes each under **the same name minus `color-`** with a
+**system-color** fallback (`--vui-surface`, `--vui-border`, `--vui-ring`, …) for the components
+to read. Alongside them sit the structural tokens: radius and shadow in three tiers
+(`--vui-radius` / `-button` / `-container`, `--vui-shadow` / `-overlay` / `-dialog`),
+`--vui-border-width`, `--vui-transition`. So:
 
 - **No theme at all** → still looks right, and follows the page's `color-scheme`.
 - **A generated theme** → drop one of `gallery/themes/*.css` into the page (light on `:root`,
   dark on `:root.dark`), or generate your own: `deno task themes:build` (see
   [`gallery/themes/_generate.ts`](./gallery/themes/_generate.ts)).
-- **Tokens under another prefix already?** Regenerate with `"vui-"`, or alias the handful of
-  variables the components read (listed per component in [API.md](./API.md)).
+- **Tokens under another prefix already?** Regenerate with `"vui-"`, or set the handful of
+  `--vui-*` names the kit reads (the whole vocabulary is one table in
+  [API.md](./API.md#the-vocabulary)) on `:root` yourself.
 
 No Tailwind, no utility classes in templates — the kit never assumes a page-level CSS framework.
+
+## Controls
+
+Buttons and inputs are **styles, not components** — one look, shared by everything. The filled
+variants are the five `design-tokens` semantic roles, so a theme drives them all:
+
+```html
+<button class="vui-btn">default</button>
+<button class="vui-btn vui-btn--primary">Save</button>
+<button class="vui-btn vui-btn--accent">Accent</button>
+<button class="vui-btn vui-btn--destructive">Delete</button>
+<button class="vui-btn vui-btn--warning">Careful</button>
+<button class="vui-btn vui-btn--success">Done</button>
+<button class="vui-btn vui-btn--ghost vui-btn--icon" aria-label="Close">✕</button>
+```
+
+…and inside any vui component, bare markup gets that same look with no classes at all, which is
+what makes a `<form method="dialog">` dropped into a dialog body come out right. Building a
+footer in JS? `button("Delete", { variant: "destructive", onClick })` returns an element with
+those classes on it. A container adapts every control inside it — its own and yours — by
+re-declaring `--vui-control-bg` &c. on itself; no descendant selectors anywhere. A variant is
+that same move one element down (which is why a `--success` button in a dialog footer stays
+green), so inventing a sixth role is five custom properties on a class of your own. Sizes ride
+the same channel (`--vui-control-min-height`, `-py`, `-px`), so a dense toolbar can shrink its
+controls the same way.
+
+Everything the kit defines lives in the `vui.base` / `vui.components` **cascade layers**, so
+your own unlayered CSS overrides any of it without `!important` or a specificity fight. See
+[API.md → Base layer](./API.md#base-layer).
 
 ## Nesting
 
@@ -124,7 +162,9 @@ deno task serve   # http://localhost:4507/gallery/
 
 Behavior is tested in a real browser: `deno task test:browser` serves the repo and drives
 headless Chrome through `tests/browser/*.html` (one page per component). `deno task test`
-covers the index and lints every component file's anatomy.
+covers the index and lints every component file's anatomy — including the style rules that keep
+the kit consistent: no raw design tokens, no hard-coded colors, and no component painting a
+control the base layer owns.
 
 ## API
 

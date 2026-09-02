@@ -22,6 +22,18 @@ Deno.test("every component file the index knows about exists on disk", async () 
 	}
 });
 
+Deno.test("baseStylesUrl points at components/base.css, which exists", async () => {
+	assertEquals(ui.baseStylesUrl(), ui.COMPONENTS_BASE + "base.css");
+	assertEquals(
+		ui.baseStylesUrl("https://cdn.example/kit/components/"),
+		"https://cdn.example/kit/components/base.css",
+	);
+	// every loader awaits it — a missing file would break the whole kit
+	const stat = await Deno.stat(new URL(ui.baseStylesUrl()));
+	assert(stat.isFile, "components/base.css missing");
+	assertEquals(ui.BASE_STYLES_ID, "vui-base");
+});
+
 Deno.test("the index re-exports the base library (one import map target for both)", () => {
 	for (
 		const name of [
