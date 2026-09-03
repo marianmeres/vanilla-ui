@@ -74,8 +74,13 @@ README.md · API.md        — human docs
    wiring, and still leans on two platform pieces: `<button role="tab">` for Enter/Space, and
    `hidden="until-found"` panels, which keep an inactive panel findable (`beforematch` selects
    its tab). That last one is why every component's `[hidden]` rule must exclude
-   `[hidden="until-found"]`. If a primitive would need keyed list diffing, defer
-   it (see DESIGN §6).
+   `[hidden="until-found"]`. Toast is the one that is a **region**, not a widget (§D13):
+   `popover="manual"` for the top layer — **re-entered on every `show()`**, since the layer is
+   ordered by entry and a modal dialog opened after it would cover it — `aria-live` on the
+   region for the announcement, and `@starting-style` for the entry. Its clock is a
+   `setTimeout`, never the countdown bar's `animationend`: a page's reduced-motion reset must
+   not decide when a toast leaves. If a primitive would need keyed list diffing, defer
+   it (see DESIGN §6) — a toast region does not, because it only appends and removes.
 8. **Types live in `src/mod.ts`.** Components are plain JS; declare `<Name>Props`,
    `<Name>View`, `Create<Name>`, add `load<Name>()`, and extend `VanillaUi` + `loadAll()`.
 9. **Controls belong to the base layer, never to a component.** Buttons and inputs are styles,
@@ -108,8 +113,8 @@ README.md · API.md        — human docs
 ## Adding a Component
 
 1. Create `components/<name>.html` following the anatomy in Convention 2 (copy `dialog.html`,
-   `popover.html` for anything anchored to a trigger, or `tabs.html` for anything built from a
-   list of props): `<style>` wrapped in
+   `popover.html` for anything anchored to a trigger, `tabs.html` for anything built from a
+   list of props, or `toast.html` for a region things are added to): `<style>` wrapped in
    `@layer vui.components { @scope (.vui-<name>) { … } }`, colors from the base vocabulary, no
    control painting (Convention 9).
 2. Add types + `load<Name>()` to `src/mod.ts` (`await loadStyles(base)` first); extend
@@ -154,7 +159,8 @@ README.md · API.md        — human docs
 
 - [docs/DESIGN.md](./docs/DESIGN.md) — why shipped templates, tokens-with-fallbacks, `data-scope`,
   events, the base layer (§D9), the popover's platform-first split (§D10), why tabs takes an
-  array where the menu takes markup (§D12); component anatomy; roadmap; non-goals.
+  array where the menu takes markup (§D12), why a toast region is a list with no reconciler and
+  why its variants tint rather than fill (§D13); component anatomy; roadmap; non-goals.
 - [components/base.css](./components/base.css) — the vocabulary and the control primitives; its
   header comment is the reference for both.
 - [README.md](./README.md) — overview, usage, theming, gallery.

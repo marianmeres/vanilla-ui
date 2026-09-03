@@ -16,7 +16,7 @@ Fetch and adopt every component (in parallel) and return the typed factories. Ca
 - `base` (`string`, optional) — URL of the `components/` directory. Default:
   [`COMPONENTS_BASE`](#components_base).
 
-**Returns:** `Promise<VanillaUi>` — `{ createDialog, createDisclosure, createPopover, createTabs }`.
+**Returns:** `Promise<VanillaUi>` — `{ createDialog, createDisclosure, createPopover, createTabs, createToast }`.
 
 **Example:**
 
@@ -71,6 +71,18 @@ Load `components/tabs.html` alone and return its typed factory.
 - `base` (`string`, optional) — as in `loadAll`.
 
 **Returns:** `Promise<CreateTabs>`.
+
+---
+
+### `loadToast(base?)`
+
+Load `components/toast.html` alone and return its typed factory.
+
+**Parameters:**
+
+- `base` (`string`, optional) — as in `loadAll`.
+
+**Returns:** `Promise<CreateToast>`.
 
 ---
 
@@ -749,6 +761,115 @@ on `.vui-tabs__panels`.
 
 ---
 
+### `createToast(props?)` — `components/toast.html`
+
+A **region** of transient, self-dismissing messages: the factory builds the rail, and every
+`show()` puts one toast in it. The rail is a `popover="manual"` — the **top layer** and nothing
+else (no light dismiss, no Esc, no invoker) — and it re-enters that layer on every toast, so a
+message is never buried by a modal dialog's backdrop or by a page's `z-index`. Rationale:
+[`docs/DESIGN.md` §D13](./docs/DESIGN.md).
+
+**Parameters:** `props` (`ToastProps`) — all optional
+
+| Prop          | Type                         | Default     | Description                                                                             |
+| ------------- | ---------------------------- | ----------- | --------------------------------------------------------------------------------------- |
+| `position`    | `ToastPosition`              | `"top-end"` | Which corner (or edge) the rail runs down; `start` / `end` follow the writing direction |
+| `ttl`         | `number`                     | `4000`      | Default life of a toast, in ms. `0` makes them sticky                                   |
+| `max`         | `number`                     | `5`         | Most toasts at once — the **oldest** is dismissed to make room. `0` = no cap            |
+| `closeButton` | `boolean`                    | `true`      | Default for a toast's ✕                                                                 |
+| `progress`    | `boolean`                    | `true`      | Draw the countdown bar (a sticky toast never has one)                                   |
+| `ariaLabel`   | `string`                     | —           | Accessible name for the region                                                          |
+| `onShow`      | `(toast: ToastItem) => void` | —           | Per `show()`, a repeat of a live id included — read `toast.count`                       |
+| `onDismiss`   | `(toast: ToastItem) => void` | —           | Per dismissal, whatever caused it: the ✕, the clock, `dismiss()`, `clear()`, the cap    |
+
+**Returns:** `ToastView`
+
+| Member                 | Description                                                                               |
+| ---------------------- | ----------------------------------------------------------------------------------------- |
+| `el`                   | The region (`data-scope="toast"`, `popover="manual"`). Appended to `<body>` on first show |
+| `count`                | `ReadonlyObservable<number>` — how many toasts are showing                                |
+| `show(message, opts?)` | Put a message in the region; returns its `ToastItem`                                      |
+| `dismiss(id)`          | Dismiss one by `id`. No-op for an unknown or already-dismissed one                        |
+| `clear()`              | Dismiss all of them (each reports as its own dismissal)                                   |
+| `destroy()`            | Stops every clock, destroys every mounted slot view, removes `el`                         |
+
+**`show(message?, opts?)`** — `message` is a [`Slot`](#slot); `opts` (`ToastOptions`):
+
+| Option        | Type           | Default          | Description                                                                                |
+| ------------- | -------------- | ---------------- | ------------------------------------------------------------------------------------------ |
+| `variant`     | `ToastVariant` | —                | `"primary" \| "accent" \| "destructive" \| "warning" \| "success"` — **tints** the surface |
+| `ttl`         | `number`       | the region's     | This toast's life, in ms. `0` makes it sticky                                              |
+| `id`          | `string`       | the message text | Identity — showing it again bumps a `×N` badge and restarts the clock                      |
+| `icon`        | `Slot`         | —                | A glyph before the message; it takes the variant's color                                   |
+| `action`      | `Slot`         | —                | A control after it, typically [`button()`](#buttonlabel-options)                           |
+| `closeButton` | `boolean`      | the region's     | Override the region's default for this one                                                 |
+
+and returns a `ToastItem`: `{ id, el, count, dismiss() }` — `count` reads live, so a handle
+kept from the first `show("Saved")` reports `2` after the second.
+
+**Events** (dispatched on `el`, bubbling):
+
+| Event         | `detail`                     | When                              |
+| ------------- | ---------------------------- | --------------------------------- |
+| `vui:show`    | `{ id, count, variant, el }` | per `show()` — a repeat included  |
+| `vui:dismiss` | `{ id, count, variant, el }` | per dismissal, whatever caused it |
+
+**Timing.** The clock is a `setTimeout`; the countdown bar is a CSS animation that only draws
+it — so a page that kills animations still dismisses on time. Hover anywhere in the region, or
+move focus into it, and every clock holds (the region gets `data-paused`, and the bars read the
+same attribute); leaving releases them with the remaining time intact.
+
+**Identity and capacity.** The `id` defaults to the message when the message is a string, so
+repeating `show("Saved")` gives you one toast with a `×2` badge and a fresh clock rather than a
+second copy. Anything else gets a unique id. Over `max` the oldest toast goes, so a loop cannot
+push the rail off screen.
+
+**Accessibility.** The region is `aria-live="polite"` and is in the document before the first
+toast, so inserting one is announced. A `destructive` or `warning` toast also carries
+`role="alert"` — announced assertively, and on insertion. The ✕ is labelled `Close`.
+
+**One caveat, the platform's.** A modal `<dialog>` makes everything outside it **inert**. A
+toast shown while one is open is painted _over_ the dialog (that is what re-entering the top
+layer buys), but its ✕ and its action are not clickable until the dialog closes — and its clock
+keeps running. Fire sticky toasts from a modal if the user must act on them.
+
+**CSS variables read:** the surface vocabulary (`--vui-surface`, `--vui-surface-foreground`,
+`--vui-border`, `--vui-surface-1*`, `--vui-muted-foreground`), the five semantic roles for the
+variants, `--vui-radius-container`, `--vui-border-width`, `--vui-shadow-overlay`, `--vui-gap`,
+`--vui-transition`. It declares the [control context](#control-context) exactly as the dialog
+panel does, so the ✕ and anything in `action` lift one step off the toast's surface.
+
+**Example** — a rail, a plain toast, an error, and an undoable action:
+
+```ts
+const toasts = createToast({
+	position: "bottom-end",
+	onDismiss: (t) => console.log("gone:", t.id),
+});
+
+toasts.show("Draft saved.");
+toasts.show("Upload failed — the server said 502.", {
+	variant: "destructive",
+	icon: "✕",
+	ttl: 0, // sticky: an error waits to be read
+});
+
+const archived = toasts.show("Moved 12 files to Archive.", {
+	ttl: 8000,
+	action: button("Undo", {
+		onClick: () => {
+			restore();
+			archived.dismiss();
+		},
+	}),
+});
+```
+
+Build the region **once** per page and keep it: `position` is decided when the rail is built,
+so switching it means `destroy()` and a new one (which takes its toasts with it).
+
+---
+
 ## Types
 
 ### `Slot`
@@ -939,6 +1060,89 @@ interface TabsView extends ViewInstance {
 type CreateTabs = (props?: TabsProps) => TabsView;
 ```
 
+### `ToastPosition`
+
+```ts
+type ToastPosition =
+	| "top-start"
+	| "top"
+	| "top-end"
+	| "bottom-start"
+	| "bottom"
+	| "bottom-end";
+```
+
+The block half is the physical side; the inline half is logical. A `bottom-*` rail stacks
+upward, so a new toast never moves the ones already on screen.
+
+### `ToastVariant`
+
+```ts
+type ToastVariant = "primary" | "accent" | "destructive" | "warning" | "success";
+```
+
+The design-tokens roles, minus `ghost`. A variant **tints** the toast's surface (a 12% wash of
+the role, with its border tinted to match) and puts the role at full strength on the icon and
+the countdown bar — it never fills the box, so the text keeps surface contrast on every theme and
+the controls inside keep one context (`docs/DESIGN.md` §D13).
+
+### `ToastOptions`
+
+```ts
+interface ToastOptions {
+	variant?: ToastVariant;
+	ttl?: number; // default: the region's; 0 = sticky
+	id?: string; // default: the message, when it is a string
+	icon?: Slot;
+	action?: Slot;
+	closeButton?: boolean; // default: the region's
+}
+```
+
+### `ToastItem`
+
+```ts
+interface ToastItem {
+	id: string;
+	el: HTMLElement;
+	readonly count: number; // live: how many times this id has been shown
+	dismiss(): void;
+}
+```
+
+### `ToastProps`
+
+```ts
+interface ToastProps {
+	position?: ToastPosition; // default "top-end"
+	ttl?: number; // default 4000; 0 = sticky
+	max?: number; // default 5; 0 = no cap
+	closeButton?: boolean; // default true
+	progress?: boolean; // default true
+	ariaLabel?: string;
+	onShow?: (toast: ToastItem) => void;
+	onDismiss?: (toast: ToastItem) => void;
+}
+```
+
+### `ToastView`
+
+```ts
+interface ToastView extends ViewInstance {
+	el: HTMLElement;
+	count: ReadonlyObservable<number>;
+	show(message?: Slot, opts?: ToastOptions): ToastItem;
+	dismiss(id: string): void;
+	clear(): void;
+}
+```
+
+### `CreateToast`
+
+```ts
+type CreateToast = (props?: ToastProps) => ToastView;
+```
+
 ### `VanillaUi`
 
 ```ts
@@ -947,6 +1151,7 @@ interface VanillaUi {
 	createDisclosure: CreateDisclosure;
 	createPopover: CreatePopover;
 	createTabs: CreateTabs;
+	createToast: CreateToast;
 }
 ```
 

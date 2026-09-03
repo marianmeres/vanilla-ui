@@ -1,0 +1,406 @@
+<!doctype html>
+<!--
+	Browser test for components/toast.html — run by `deno task test:browser`
+	(scripts/browser-test.ts drives headless Chrome and reads #result).
+
+	Contract: one line per check — `ok <name>` / `FAIL <name> (detail)` — and a
+	final `DONE` (or `ERROR …` on an uncaught exception).
+
+	Four parts: the region (the top layer, the positions, the aria), one toast
+	(slots, variants, the ✕, the handle), the clocks (auto-dismiss, pause on
+	hover and focus, the repeat badge, the capacity cap), and the base layer's
+	controls inside a toast.
+-->
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<title>toast · browser test</title>
+		<link rel="icon" href="data:," />
+		<script type="importmap">
+		{
+			"imports": {
+				"@marianmeres/vanilla": "../../dist/mod.js",
+				"@marianmeres/vanilla-ui": "../../dist/mod.js"
+			}
+		}
+		</script>
+	</head>
+	<body>
+		<!-- a few tokens so "styled by the kit" is distinguishable from "not", and
+		     no transitions: a toast's geometry and paint are read right after it
+		     is shown, and getComputedStyle would otherwise return a mid-flight
+		     value of the entry fade. It also makes the exit immediate, so a
+		     dismissed node is gone by the next tick. -->
+		<style>
+		:root {
+			--vui-color-surface: rgb(250, 250, 250);
+			--vui-color-surface-1-hover: rgb(4, 5, 6);
+			--vui-color-destructive: rgb(200, 0, 0);
+			--vui-transition: 0ms;
+		}
+		</style>
+
+		<pre id="result"></pre>
+
+		<!-- a nested child component whose action is ALSO named "dismissClicked" -->
+		<template id="tpl-child">
+			<div data-scope="child">
+				<button type="button" data-on="click:dismissClicked">x</button>
+			</div>
+		</template>
+
+		<script type="module">
+		import {
+			button,
+			createView,
+			delegate,
+			fromTemplate,
+			loadAll,
+		} from "@marianmeres/vanilla-ui";
+
+		const out = [];
+		const check = (name, cond, detail = "") =>
+			out.push(cond ? `ok ${name}` : `FAIL ${name}${detail ? ` (${detail})` : ""}`);
+		const flush = () => (document.getElementById("result").textContent = out.join("\n"));
+		const tick = (ms = 30) => new Promise((r) => setTimeout(r, ms));
+		const items = (view) => [...view.el.querySelectorAll(".vui-toast__item")];
+
+		try {
+			const { createToast, createDialog } = await loadAll();
+			check("template adopted", !!document.getElementById("tpl-vui-toast"));
+			check("item template adopted too", !!document.getElementById("tpl-vui-toast-item"));
+
+			/* ---- the region ---------------------------------------------------- */
+			const seen = [];
+			const t = createToast({
+				ariaLabel: "Notifications",
+				onShow: (x) => seen.push(`show:${x.id}:${x.count}`),
+				onDismiss: (x) => seen.push(`dismiss:${x.id}`),
+			});
+			t.el.addEventListener("vui:show", (e) => seen.push(`ev:show:${e.detail.id}`));
+			t.el.addEventListener("vui:dismiss", (e) => seen.push(`ev:dismiss:${e.detail.id}`));
+
+			check("data-scope on root", t.el.dataset.scope === "toast");
+			check("default position", t.el.dataset.position === "top-end");
+			check("it is a manual popover", t.el.getAttribute("popover") === "manual");
+			check("it is a polite live region", t.el.getAttribute("aria-live") === "polite");
+			check("labelled", t.el.getAttribute("aria-label") === "Notifications");
+			check("nothing showing yet", t.count.get() === 0 && !t.el.isConnected);
+
+			/* ---- one toast ----------------------------------------------------- */
+			const first = t.show("Saved");
+			check("show() connects the region", t.el.isConnected);
+			check("…and puts it in the top layer", t.el.matches(":popover-open"));
+			check("count observable", t.count.get() === 1);
+			check("one item in the region", items(t).length === 1);
+			check("the handle carries the id (the message, by default)", first.id === "Saved");
+			check("handle.el is the item", first.el === items(t)[0]);
+			check(
+				"message slot",
+				first.el.querySelector(".vui-toast__message").textContent === "Saved",
+			);
+			const plainBorder = getComputedStyle(first.el).borderTopColor;
+			check("it reported once", seen.join() === "show:Saved:1,ev:show:Saved", seen.join());
+			check(
+				"no variant -> no data-variant, and no alert role",
+				!first.el.hasAttribute("data-variant") && !first.el.hasAttribute("role"),
+			);
+			// the rail passes pointers through; a toast opts back in
+			check(
+				"the rail is transparent to the pointer",
+				getComputedStyle(t.el).pointerEvents === "none",
+			);
+			check(
+				"…and the toast is not",
+				getComputedStyle(first.el).pointerEvents === "auto",
+			);
+			const railBox = t.el.getBoundingClientRect();
+			check(
+				"the rail is the viewport",
+				railBox.width === innerWidth && railBox.height === innerHeight,
+				`${railBox.width}x${railBox.height}`,
+			);
+			// top-end: the toast sits at the top, against the inline end
+			const box = first.el.getBoundingClientRect();
+			check(
+				"top-end: parked at the top",
+				box.top < innerHeight / 3,
+				String(box.top),
+			);
+			check(
+				"top-end: against the inline end",
+				innerWidth - box.right < box.left,
+				`${box.left} / ${innerWidth - box.right}`,
+			);
+
+			/* ---- the ✕ --------------------------------------------------------- */
+			seen.length = 0;
+			const close = first.el.querySelector(".vui-toast__close");
+			check("the ✕ is there by default", !!close && !close.hidden);
+			close.click();
+			check("the ✕ dismisses", t.count.get() === 0, String(t.count.get()));
+			check(
+				"…and reports it once",
+				seen.join() === "dismiss:Saved,ev:dismiss:Saved",
+				seen.join(),
+			);
+			await tick();
+			check("…and the node is gone", items(t).length === 0, String(items(t).length));
+			check(
+				"an empty region leaves the top layer",
+				!t.el.matches(":popover-open"),
+			);
+
+			/* ---- slots, variants, options -------------------------------------- */
+			const child = createView((track) => {
+				const el = fromTemplate("tpl-child");
+				let hits = 0;
+				track(delegate(el, { dismissClicked: () => hits++ }));
+				return { el, hits: () => hits };
+			});
+			const rich = t.show("Deleted 3 files", {
+				variant: "destructive",
+				id: "del",
+				icon: "!",
+				action: button("Undo", { variant: "ghost" }),
+				ttl: 0,
+			});
+			check("variant -> data-variant", rich.el.dataset.variant === "destructive");
+			check(
+				"destructive is announced assertively",
+				rich.el.getAttribute("role") === "alert",
+			);
+			const iconEl = rich.el.querySelector(".vui-toast__icon");
+			const actionEl = rich.el.querySelector(".vui-toast__action");
+			check("icon slot shown", !iconEl.hidden && iconEl.textContent === "!");
+			check(
+				"action slot shown",
+				!actionEl.hidden && actionEl.querySelector("button")?.textContent === "Undo",
+			);
+			check(
+				"the variant tints the surface (not fills it)",
+				getComputedStyle(rich.el).backgroundColor !== "rgb(200, 0, 0)" &&
+					getComputedStyle(rich.el).backgroundColor !== "rgb(250, 250, 250)",
+				getComputedStyle(rich.el).backgroundColor,
+			);
+			const richCs = getComputedStyle(rich.el);
+			check(
+				"…and tints the border with it — one width all round, no accent edge",
+				["Top", "Right", "Bottom", "Left"].every(
+					(side) => richCs[`border${side}Width`] === "1px",
+				) && richCs.borderLeftColor === richCs.borderTopColor &&
+					richCs.borderTopColor !== plainBorder,
+				`${richCs.borderLeftWidth} ${richCs.borderTopColor} vs ${plainBorder}`,
+			);
+			check(
+				"…and puts the role at full strength on the icon",
+				getComputedStyle(rich.el.querySelector(".vui-toast__icon")).color ===
+					"rgb(200, 0, 0)",
+				getComputedStyle(rich.el.querySelector(".vui-toast__icon")).color,
+			);
+			check(
+				"a sticky toast draws no countdown",
+				rich.el.querySelector(".vui-toast__progress").hidden,
+			);
+			const viewToast = t.show(child, { id: "view", ttl: 0, closeButton: false });
+			check("a view slot is mounted", child.el.isConnected);
+			check(
+				"closeButton: false hides the ✕",
+				viewToast.el.querySelector(".vui-toast__close").hidden,
+			);
+			child.el.querySelector("button").click();
+			check("nested data-scope: the child's own action fired", child.hits() === 1);
+			check(
+				"nested data-scope: it did not dismiss the toast",
+				t.count.get() === 2,
+				String(t.count.get()),
+			);
+			viewToast.dismiss();
+			await tick();
+			check("handle.dismiss()", t.count.get() === 1, String(t.count.get()));
+			check("…destroys the view it held", !child.el.isConnected);
+			viewToast.dismiss();
+			check("dismissing twice is a no-op", t.count.get() === 1);
+
+			/* ---- the same id again: one toast, a ×N badge, a fresh clock -------- */
+			seen.length = 0;
+			const again = t.show("Deleted 3 files", { id: "del", ttl: 0 });
+			check("a repeat returns the same handle", again === rich);
+			check("…and stacks no second copy", t.count.get() === 1, String(t.count.get()));
+			const badge = rich.el.querySelector(".vui-toast__count");
+			check(
+				"…it bumps the badge",
+				!badge.hidden && badge.textContent === "×2",
+				badge.textContent,
+			);
+			check("…live on the handle", rich.count === 2, String(rich.count));
+			check(
+				"…and reports the repeat",
+				seen.join() === "show:del:2,ev:show:del",
+				seen.join(),
+			);
+			t.clear();
+			await tick();
+			check("clear() empties the region", t.count.get() === 0 && !items(t).length);
+
+			/* ---- the clocks ----------------------------------------------------- */
+			const ttl = t.show("goes away", { ttl: 120 });
+			const bar = ttl.el.querySelector(".vui-toast__progress");
+			check("a ttl toast draws the countdown", !bar.hidden);
+			check(
+				"…as a CSS animation of that length",
+				getComputedStyle(bar).animationDuration === "0.12s",
+				getComputedStyle(bar).animationDuration,
+			);
+			check(
+				"…2px along the block-end edge",
+				getComputedStyle(bar).height === "2px",
+				getComputedStyle(bar).height,
+			);
+			await tick(250);
+			check("the clock dismisses it", t.count.get() === 0, String(t.count.get()));
+			check("…and takes the node with it", !items(t).length);
+
+			// pause on hover: the pointer is over a toast -> every clock holds
+			const held = t.show("held", { ttl: 100 });
+			held.el.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+			check("hover sets the flag on the region", t.el.hasAttribute("data-paused"));
+			const heldBar = held.el.querySelector(".vui-toast__progress");
+			check(
+				"…and the bar reads the same flag",
+				getComputedStyle(heldBar).animationPlayState === "paused",
+				getComputedStyle(heldBar).animationPlayState,
+			);
+			await tick(250);
+			check("a held toast stays", t.count.get() === 1, String(t.count.get()));
+			// leaving for another element inside the same toast does NOT resume
+			held.el.dispatchEvent(
+				new MouseEvent("mouseout", {
+					bubbles: true,
+					relatedTarget: held.el.querySelector(".vui-toast__close"),
+				}),
+			);
+			check("moving within the toast keeps it held", t.el.hasAttribute("data-paused"));
+			held.el.dispatchEvent(
+				new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }),
+			);
+			check("leaving the region releases it", !t.el.hasAttribute("data-paused"));
+			// the ✕ carries a data-on of its own, which would shadow the region if
+			// the pause went through delegate() — hover it, and leave FROM it
+			const heldClose = held.el.querySelector(".vui-toast__close");
+			heldClose.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+			check("hovering the ✕ holds them too", t.el.hasAttribute("data-paused"));
+			heldClose.dispatchEvent(
+				new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }),
+			);
+			check("…and leaving from the ✕ releases them", !t.el.hasAttribute("data-paused"));
+			await tick(250);
+			check("…and the rest of its life plays out", t.count.get() === 0);
+
+			// focus holds it too (a keyboard reader gets the same grace)
+			const focused = t.show("focused", { ttl: 100 });
+			focused.el.querySelector(".vui-toast__close").focus();
+			focused.el.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+			await tick(250);
+			check("focus in the region holds the clocks", t.count.get() === 1);
+			focused.el.dispatchEvent(
+				new FocusEvent("focusout", { bubbles: true, relatedTarget: document.body }),
+			);
+			await tick(250);
+			check("…and blur releases them", t.count.get() === 0);
+
+			/* ---- the capacity cap ----------------------------------------------- */
+			const capped = createToast({ max: 3, ttl: 0, position: "bottom-start" });
+			for (const n of ["a", "b", "c", "d"]) capped.show(n);
+			check(
+				"max: never more than that",
+				capped.count.get() === 3,
+				String(capped.count.get()),
+			);
+			await tick();
+			check(
+				"…and the OLDEST is the one that went",
+				items(capped).map((i) => i.dataset.id).join() === "b,c,d",
+				items(capped).map((i) => i.dataset.id).join(),
+			);
+			// bottom-start: the stack grows upward from the bottom, inline start
+			const cs = getComputedStyle(capped.el);
+			check(
+				"bottom-*: the flex direction is reversed, so nothing on screen moves",
+				cs.flexDirection === "column-reverse",
+				cs.flexDirection,
+			);
+			check(
+				"…start: aligned to the inline start",
+				cs.alignItems === "flex-start",
+				cs.alignItems,
+			);
+			const cBox = items(capped)[0].getBoundingClientRect();
+			check(
+				"bottom-start: the oldest is against the bottom edge",
+				innerHeight - cBox.bottom < 40 && cBox.left < innerWidth / 3,
+				`${innerHeight - cBox.bottom} / ${cBox.left}`,
+			);
+			capped.destroy();
+			check("destroy(): the region is gone", !capped.el.isConnected);
+
+			/* ---- a toast holds BASE controls ------------------------------------ */
+			const withBtn = t.show("Undo?", { action: button("Undo"), ttl: 0 });
+			const undo = withBtn.el.querySelector(".vui-toast__action button");
+			const undoCs = getComputedStyle(undo);
+			check(
+				"a control in a toast is lifted by the toast's own context",
+				undoCs.getPropertyValue("--vui-control-bg-hover").trim() === "rgb(4, 5, 6)",
+				undoCs.getPropertyValue("--vui-control-bg-hover"),
+			);
+			check(
+				"…and laid out by the base layer",
+				undoCs.minHeight === "40px",
+				undoCs.minHeight,
+			);
+			const closeCs = getComputedStyle(withBtn.el.querySelector(".vui-toast__close"));
+			check(
+				"the ✕ is the kit's ghost icon button",
+				closeCs.backgroundColor === "rgba(0, 0, 0, 0)" && closeCs.borderRadius === "50%",
+				`${closeCs.backgroundColor} ${closeCs.borderRadius}`,
+			);
+
+			/* ---- with a modal dialog open ---------------------------------------- */
+			// The toast region re-enters the top layer on every show(), so it paints
+			// OVER a modal dialog that opened before it. (The dialog still makes
+			// everything outside it inert, so the ✕ is not clickable meanwhile —
+			// the platform's call, and documented as such.)
+			const dlg = createDialog({ title: "Busy" });
+			document.body.append(dlg.el);
+			dlg.open();
+			const overModal = t.show("over the modal", { ttl: 0 });
+			check(
+				"a toast shown over a modal re-enters the top layer",
+				t.el.matches(":popover-open"),
+			);
+			// …but a modal dialog makes everything outside it INERT, region
+			// included: it is painted, not operable. The platform's call, and the
+			// reason this is pinned rather than worked around.
+			const modalClose = overModal.el.querySelector(".vui-toast__close");
+			modalClose.focus();
+			check(
+				"…while the modal makes it inert (painted, not operable)",
+				document.activeElement !== modalClose,
+				String(document.activeElement?.className),
+			);
+			dlg.close();
+			await tick();
+			dlg.destroy();
+
+			t.destroy();
+			check("destroy(): the region is removed", !t.el.isConnected);
+			check("destroy(): the count settles", t.count.get() === 0);
+
+			out.push("DONE");
+		} catch (e) {
+			out.push("ERROR " + (e && e.stack || e));
+		}
+		flush();
+		</script>
+	</body>
+</html>

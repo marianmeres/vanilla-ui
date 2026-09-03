@@ -25,8 +25,9 @@ rationale is in [`docs/DESIGN.md`](./docs/DESIGN.md).
 | popover / menu | [`components/popover.html`](./components/popover.html)       | Popover API + CSS Anchor Positioning | ✅     |
 | disclosure     | [`components/disclosure.html`](./components/disclosure.html) | native `<details>` / `<summary>`     | ✅     |
 | tabs           | [`components/tabs.html`](./components/tabs.html)             | ARIA tabs + `hidden="until-found"`   | ✅     |
+| toast          | [`components/toast.html`](./components/toast.html)           | Popover API (top layer) + timers     | ✅     |
 
-Planned next: toast. See
+Deferred: select / combobox — they would need keyed list rendering. See
 [`docs/DESIGN.md` → Roadmap](./docs/DESIGN.md#5-roadmap).
 
 ## Install
@@ -183,6 +184,37 @@ them**: the browser reveals the panel, and the component selects its tab. And a 
 `<button role="tab">` with no class on it — the base layer paints it by that role, so
 `.vui-tab` / `.vui-tablist` give a hand-written strip (a nav of `<a>`s, say) the same look with
 no factory at all.
+
+### Toasts
+
+`createToast` builds a **region**, not a widget: one call makes the rail, and every `show()`
+puts a message in it. The rail lives in the **top layer** (`popover="manual"`) and re-enters it
+on every toast, so a message is never buried by a modal dialog's backdrop or by a page's
+`z-index`.
+
+```ts
+const { createToast } = await loadAll();
+
+const toasts = createToast({ position: "top-end" }); // ttl 4000, max 5, ✕ and countdown on
+
+toasts.show("Draft saved.");
+toasts.show("Upload failed — the server said 502.", {
+	variant: "destructive",
+	icon: "✕",
+});
+
+// sticky, with a way out of its own
+const t = toasts.show("Moved 12 files to Archive.", {
+	ttl: 0,
+	action: button("Undo", { onClick: () => (restore(), t.dismiss()) }),
+});
+```
+
+Hover a toast — or tab into one — and every clock holds, countdown bars included. Show the
+same message twice and it gets a `×2` badge and a fresh clock instead of a second copy (the
+`id` defaults to the message text; pass your own to group differently). Over `max`, the oldest
+goes. A `variant` **tints** the surface rather than filling it, so the text keeps its contrast
+on every theme and the ✕ inside is the same base-layer control as the dialog's.
 
 ### Everything from vanilla is here too
 

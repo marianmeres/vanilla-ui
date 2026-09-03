@@ -606,6 +606,74 @@
 				</div>
 				<pre class="log" data-ref="log"></pre>
 			</section>
+
+			<!-- ================================================================= toast -->
+			<section class="component" id="toast">
+				<h2>toast</h2>
+				<p>
+					The first primitive that is a <em>region</em> rather than a
+					widget: one call builds the rail, and every
+					<code>show()</code> puts a message in it. It lives in the
+					<strong>top layer</strong> (<code>popover="manual"</code>) and
+					re-enters it on every toast, so a message is never buried by a
+					modal dialog's backdrop or by a page's <code>z-index</code> —
+					try <em>from inside a dialog</em>. Hover a toast, or tab into
+					one, and every clock holds — the countdown bars with them.
+					Fire the same message twice and it gets a <code>×2</code>
+					badge instead of a second copy.
+				</p>
+				<div class="vui-row">
+					<button type="button" class="vui-btn" data-on="click:plain">
+						plain
+					</button>
+					<button type="button" class="vui-btn" data-on="click:success">
+						success
+					</button>
+					<button type="button" class="vui-btn" data-on="click:warning">
+						warning
+					</button>
+					<button type="button" class="vui-btn" data-on="click:destructive">
+						destructive
+					</button>
+					<button type="button" class="vui-btn" data-on="click:primary">
+						primary
+					</button>
+					<button type="button" class="vui-btn" data-on="click:accent">
+						accent
+					</button>
+				</div>
+
+				<p style="margin: 1.5rem 0 0.5rem; font-size: 0.925rem">
+					The rail is built with a <code>position</code> — six of them,
+					<code>start</code> / <code>end</code> following the writing
+					direction. Switching it here rebuilds the region, which is all
+					there is to it:
+				</p>
+				<div class="vui-row">
+					<select
+						class="vui-input vui-select"
+						data-ref="position"
+						data-on="change:reposition"
+						aria-label="Position"
+					></select>
+					<button type="button" class="vui-btn" data-on="click:sticky">
+						sticky, with an action
+					</button>
+					<button type="button" class="vui-btn" data-on="click:repeat">
+						the same one, three times
+					</button>
+					<button type="button" class="vui-btn" data-on="click:flood">
+						eight at once (max: 5)
+					</button>
+					<button type="button" class="vui-btn" data-on="click:inDialog">
+						from inside a dialog
+					</button>
+					<button type="button" class="vui-btn" data-on="click:clear">
+						clear
+					</button>
+				</div>
+				<pre class="log" data-ref="log"></pre>
+			</section>
 		</div>
 
 		<!-- ------------------------------------------------ gallery-only templates -->
@@ -1320,6 +1388,138 @@
 						document.body.append(dlg.el);
 						dlg.open();
 					},
+				}),
+			);
+		});
+
+		/* ---- toast section --------------------------------------------------- */
+		enhance("#toast", (el, track) => {
+			const r = refs(el);
+			const log = (line) => {
+				r.log.textContent += (r.log.textContent ? "\n" : "") + line;
+				r.log.scrollTop = r.log.scrollHeight;
+			};
+
+			const POSITIONS = [
+				"top-end",
+				"top",
+				"top-start",
+				"bottom-end",
+				"bottom",
+				"bottom-start",
+			];
+			for (const p of POSITIONS) {
+				const o = document.createElement("option");
+				o.value = o.textContent = p;
+				r.position.append(o);
+			}
+
+			// A region is built with its position, so switching it rebuilds the
+			// region — destroy() takes the rail and every toast in it with it.
+			let toasts;
+			const build = (position) => {
+				toasts?.destroy();
+				toasts = ui.createToast({
+					position,
+					ariaLabel: "Gallery notifications",
+					onShow: (t) => log(`vui:show "${t.id}"${t.count > 1 ? ` ×${t.count}` : ""}`),
+					onDismiss: (t) => log(`vui:dismiss "${t.id}"`),
+				});
+			};
+			r.position.value = "top-end";
+			build("top-end");
+			track(() => toasts?.destroy());
+
+			track(
+				delegate(el, {
+					reposition: () => {
+						build(r.position.value);
+						toasts.show(`position: ${r.position.value}`);
+					},
+
+					plain: () => toasts.show("Draft saved."),
+					success: () =>
+						toasts.show("Deployed to production.", {
+							variant: "success",
+							icon: "✓",
+						}),
+					warning: () =>
+						toasts.show("Two files were skipped.", {
+							variant: "warning",
+							icon: "!",
+						}),
+					// destructive and warning also carry role="alert", so a screen
+					// reader is interrupted rather than queued
+					destructive: () =>
+						toasts.show("Upload failed — the server said 502.", {
+							variant: "destructive",
+							icon: "✕",
+						}),
+					primary: () => toasts.show("Three new followers.", { variant: "primary" }),
+					accent: () => toasts.show("Your export is ready.", { variant: "accent" }),
+
+					// ttl: 0 never expires, so it needs a way out: the ✕, or the
+					// action's own handler. The action is a Slot — an ordinary
+					// base-layer button, built by button().
+					sticky: () => {
+						const t = toasts.show("Moved 12 files to Archive.", {
+							id: "archive",
+							ttl: 0,
+							icon: "📦",
+							action: button("Undo", {
+								onClick: () => {
+									log("Undo clicked");
+									t.dismiss();
+								},
+							}),
+						});
+					},
+
+					// the same id (here: the same message text) three times — one
+					// toast, a ×3 badge, and its clock restarted each time
+					repeat: () => {
+						for (let i = 0; i < 3; i++) toasts.show("Nothing to commit.");
+					},
+
+					// over capacity the OLDEST goes, so the rail never runs off screen
+					flood: () => {
+						for (let i = 1; i <= 8; i++) toasts.show(`Message ${i} of 8.`);
+					},
+
+					// the point of the top layer: a modal dialog is above the page,
+					// and a toast shown after it is above the dialog
+					inDialog: () => {
+						const dlg = ui.createDialog({
+							title: "Publish",
+							body: "A modal dialog is in the top layer, over the page. " +
+								"The toast region re-enters that layer on every show(), " +
+								"so this one lands on top of the dialog rather than " +
+								"under its backdrop. (The dialog does make everything " +
+								"outside it inert while it is open — the toast is " +
+								"visible, its ✕ is not clickable until you close this.)",
+							footer: (() => {
+								const row = document.createElement("div");
+								row.className = "vui-row";
+								row.append(
+									button("Publish", {
+										variant: "primary",
+										onClick: () =>
+											toasts.show("Published.", {
+												variant: "success",
+												icon: "✓",
+												ttl: 0,
+											}),
+									}),
+								);
+								return row;
+							})(),
+							onClose: () => dlg.destroy(),
+						});
+						document.body.append(dlg.el);
+						dlg.open();
+					},
+
+					clear: () => toasts.clear(),
 				}),
 			);
 		});

@@ -376,6 +376,64 @@ that takes a list. Both are worth saying out loud.
   its items. What it does not do is move the selection: the component changes nothing behind
   the consumer's back.
 
+### D13 — Toast: a region, and a list without a reconciler
+
+The fifth primitive is the first that is a **region** rather than a widget: `createToast()`
+builds a rail, and every `show()` puts one message in it. That inversion decides the rest.
+
+- **It is a list, and D8 still holds.** A toast region only ever appends and removes; nothing
+  is ever re-rendered from a model, so there is no diffing and no keys — the "defer what needs
+  a reconciler" line is not crossed, it is simply not approached. What tabs took as an array
+  (D12) this one takes one call at a time, because the messages arrive one at a time. The
+  only list state is a `Map` of live toasts, and it exists for two features that need
+  identity: the repeat badge and the capacity cap.
+
+- **The top layer, re-entered on every toast.** `popover="manual"` — no light dismiss, no Esc,
+  no invoker; the top layer and nothing else. A `position: fixed` rail loses to a modal
+  `<dialog>`'s backdrop and to any `z-index` on the page, and the top layer is ordered by
+  entry, so a dialog opened _after_ the region would still cover it. Hence `show()` re-enters
+  the layer (hide, then show) whenever the region is already up — unless focus is inside it,
+  since hiding a popover moves focus and a reader on the ✕ keeps it. What this does **not**
+  buy is interactivity: a modal dialog makes everything outside it inert, so while one is open
+  a toast is visible but its ✕ is not clickable. That is the platform's call, it is pinned by
+  a browser test, and it is the right one — the modal is modal.
+
+- **The clock is a `setTimeout`; the countdown bar is a CSS animation.** Driving the dismissal
+  from the bar's `animationend` would be one source of truth and is very tempting — but it
+  hands the behavior to the page's stylesheet, and the most common reduced-motion reset in the
+  wild (`*, *::before, *::after { animation-duration: 0.01ms !important }`) would make every
+  toast vanish on arrival, while a blunter `animation: none` would make none of them leave.
+  So the bar is decoration and the timeout is the clock. They agree because they pause
+  together: hover or focus anywhere in the region sets `data-paused`, the script holds the
+  timeouts off it and the CSS holds the bars off the same attribute.
+
+- **The variant tints the surface; it does not fill it.** Stuic's Notifications paint the whole
+  box in the role color, which is the stronger signal. Here the box stays a surface with a 12%
+  wash of the role, its border tinted to match, and the role at full strength only on the icon
+  and the countdown bar — because a
+  filled toast holds _controls_ (a ✕, an Undo) and D9 says a container adapts controls by
+  re-declaring `--vui-control-*` on itself: a filled box would need its own context per role,
+  and the ghost ✕'s resting color could not follow it at all (it is declared on the element).
+  A tinted box keeps ONE context — the dialog panel's, verbatim — so the ✕ _is_ the dialog's ✕
+  and an action button _is_ a dialog footer button. Legibility comes free with it: the text
+  stays at surface contrast on every theme, with no white-on-amber to check.
+
+- **Identity defaults to the message.** Stuic hashes the content into an id; here the id is
+  simply the text (a `Map` key can be a string), so `show("Saved")` twice is one toast with a
+  `×2` badge and a restarted clock, with nothing for the consumer to know. Anything that is
+  not a string gets a fresh id, and an explicit `id` overrides both. Over capacity the
+  **oldest** goes, so a runaway loop cannot push the rail off screen.
+
+- **`@starting-style` is the entry.** No keyframes, no "added" class, no scheduling: the style
+  the browser starts from the first time it lays the toast out. The exit is the same two
+  properties under `[data-exiting]`, and the node is removed on `transitionend` — or by a net
+  whose length is read off the box, because a page with no transitions at all fires no
+  `transitionend` and the node still has to go.
+
+There is deliberately no icon set (the kit has no icon story; `icon` is a `Slot` like every
+other), no length-scaled TTL, and no queue behind the cap: a toast that never got shown is a
+toast that no longer matters.
+
 ---
 
 ## 3. Anatomy of a component (the contract)
@@ -460,7 +518,7 @@ In this order — each one mostly platform:
 | 2 | menu / popover  | Popover API (`popover="auto"`) | ✅ shipped — one `popover` component, `role: "menu"` for the menu (D10)    |
 | 3 | disclosure      | `<details>` / `<summary>`      | ✅ shipped — `name` is the accordion, `::details-content` the motion (D11) |
 | 4 | tabs            | roving `tabindex`, aria-tabs   | ✅ shipped — a tab is a base control; `hidden=until-found` panels (D12)    |
-| 5 | toast           | region + timers                | a leaf; `mount` into a fixed host                                          |
+| 5 | toast           | region + timers                | ✅ shipped — a rail in the top layer; append-and-remove, no diffing (D13)  |
 | — | select/combobox | listbox + keyed options        | **deferred** — needs keyed lists (D8)                                      |
 
 ---

@@ -1,0 +1,636 @@
+<!--
+	vui · toast — a region of transient, self-dismissing messages.
+
+	SINGLE-FILE COMPONENT: markup (<template>), styling (<style>, @scope'd and
+	@layer'd) and logic (inline <script type="module">) in one file. Load it with
+	loadComponent() (or the typed loadToast() / loadAll() from the index).
+
+	The fifth primitive is the first one that is a REGION rather than a widget:
+	createToast() builds the rail, and every call to its show() puts one message
+	in it. That is also why it takes no list — a toast region is append-and-remove
+	from end to end, so there is nothing to diff and no keyed list in sight
+	(DESIGN §D8/§D13).
+
+	Three platform pieces carry it:
+
+	  popover="manual"  the TOP LAYER, and nothing else: no light dismiss, no Esc,
+	                    no invoker. A `position: fixed` rail loses to a modal
+	                    <dialog>'s backdrop and to any z-index on the page; a
+	                    popover cannot. Each show() re-enters the layer so the
+	                    toasts stay on top of whatever joined it after them.
+	  aria-live="polite" the region is in the document before the first toast, so
+	                    inserting one is announced. A destructive or warning toast
+	                    carries role="alert" and is announced assertively.
+	  @starting-style   the entry transition, with no keyframes and no "added"
+	                    class: the style the browser starts from the first time it
+	                    lays a toast out.
+
+	Props (all optional) — the REGION:
+	  position    string   "top-start" | "top" | "top-end" | "bottom-start" |
+	                       "bottom" | "bottom-end"                    [top-end]
+	  ttl         number   default life of a toast in ms; 0 = sticky      [4000]
+	  max         number   most toasts at once — the oldest goes; 0 = no cap [5]
+	  closeButton boolean  default: render the ✕                         [true]
+	  progress    boolean  default: draw the countdown bar               [true]
+	  ariaLabel   string   accessible name for the region
+	  onShow      (toast)  callback up, per show() — repeats included
+	  onDismiss   (toast)  callback up, per dismissal, whatever caused it
+
+	Returns a view:
+	  { el, count, show(message, opts?), dismiss(id), clear(), destroy() }
+
+	show(message, opts?) — message is a Slot (text | HTMLElement | view), opts:
+	  variant     string   "primary" | "accent" | "destructive" | "warning" |
+	                       "success" — tints the surface and its border
+	                                                               [no variant]
+	  ttl         number   this toast's life in ms; 0 = sticky   [region's ttl]
+	  id          string   identity: showing the same id again bumps a ×N badge
+	                       and restarts the clock instead of stacking a second
+	                       copy                    [the message, when it is text]
+	  icon        Slot     a glyph before the message
+	  action      Slot     a control after it (typically button("Undo", …))
+	  closeButton boolean  override the region's default
+	and returns a handle: { id, el, count, dismiss() }.
+
+	Events out (CustomEvent on `el`, bubbling):
+	  "vui:show"     detail: { id, count, variant, el }
+	  "vui:dismiss"  detail: { id, count, variant, el }
+
+	The clock is a setTimeout and the countdown bar is a CSS animation, paused
+	together while the pointer is over the region or the keyboard is in it. The
+	bar is decoration on purpose: a page that kills animations (a blanket
+	reduced-motion reset, say) still gets its toasts dismissed on time.
+
+	Imports the library by BARE specifier — loadComponent() runs this module
+	from a blob: URL, which resolves only through the host's import map.
+-->
+<template id="tpl-vui-toast">
+	<div class="vui-toast" data-scope="toast" popover="manual" aria-live="polite"></div>
+</template>
+
+<!-- One toast. The ✕ is a BASE control (components/base.css), the same ghost
+     icon button as the dialog's — this file only places it. -->
+<template id="tpl-vui-toast-item">
+	<div class="vui-toast__item">
+		<span class="vui-toast__icon" data-ref="icon" hidden></span>
+		<div class="vui-toast__message" data-ref="message"></div>
+		<span class="vui-toast__count" data-ref="count" hidden></span>
+		<div class="vui-toast__action" data-ref="action" hidden></div>
+		<button
+			type="button"
+			class="vui-toast__close vui-btn vui-btn--ghost vui-btn--icon"
+			data-ref="closeButton"
+			data-on="click:dismissClicked"
+			aria-label="Close"
+		>
+			&#x2715;
+		</button>
+		<div class="vui-toast__progress" data-ref="progress" hidden></div>
+	</div>
+</template>
+
+<!--
+	Styles are adopted into <head> verbatim (global cascade), encapsulated by
+	native CSS @scope against the root class and placed in the `vui.components`
+	cascade layer (declared, and ordered after `vui.base`, by components/base.css).
+
+	This block styles the region and the toast's own CHROME only. It never paints
+	a control: the ✕ and whatever lands in the `action` slot come from the base
+	layer, and a toast — being a surface, like the dialog panel — adapts them by
+	re-declaring `--vui-control-*` on itself. Colors go through the base
+	vocabulary (`--vui-surface`, not `--vui-color-surface`) with a system-color
+	fallback, so a theme is optional and this file still renders alone.
+-->
+<style>
+@layer vui.components {
+	@scope (.vui-toast) {
+		:scope {
+			--_edge: 1rem;
+			/* which way a toast slides in from — the edge it belongs to */
+			--_from: -0.5rem;
+
+			/* Reset the UA [popover] box — centered, fit-content, bordered,
+			   painted, scrollable — into a transparent rail over the viewport.
+			   The UA's `inset: 0` stays: the rail IS the viewport, and the flex
+			   alignment below parks the stack in one of its corners. */
+			position: fixed;
+			inset: 0;
+			margin: 0;
+			padding: var(--_edge);
+			width: auto;
+			height: auto;
+			border: 0;
+			background: transparent;
+			color: var(--vui-foreground, CanvasText);
+			overflow: visible;
+
+			display: flex;
+			flex-direction: column;
+			justify-content: flex-start;
+			align-items: flex-end;
+			gap: var(--vui-gap, 0.5rem);
+
+			/* the page stays usable underneath: the rail passes every pointer
+			   through, and a toast opts back in */
+			pointer-events: none;
+		}
+		/* every top-layer element gets one; ours must neither dim the page nor
+		   catch a click meant for it */
+		:scope::backdrop {
+			background: transparent;
+			pointer-events: none;
+		}
+
+		/* THE SIX POSITIONS. The block axis is the flex DIRECTION, so a new toast
+		   is always added on the side away from the edge and nothing already on
+		   screen moves under the reader; the inline axis is the alignment. */
+		:scope[data-position^="bottom"] {
+			flex-direction: column-reverse;
+			--_from: 0.5rem;
+		}
+		:scope[data-position$="start"] {
+			align-items: flex-start;
+		}
+		:scope[data-position="top"],
+		:scope[data-position="bottom"] {
+			align-items: center;
+		}
+
+		.vui-toast__item {
+			--_bg: var(--vui-surface, Canvas);
+			--_fg: var(--vui-surface-foreground, CanvasText);
+			--_border: var(
+				--vui-border,
+				color-mix(in srgb, CanvasText 20%, transparent)
+			);
+			/* the role color, where there is one — the edge, the icon, the bar */
+			--_accent: var(--_border);
+
+			pointer-events: auto;
+			position: relative; /* the countdown bar is placed against this box */
+			box-sizing: border-box;
+			display: flex;
+			align-items: center;
+			gap: 0.75rem;
+			/* one width for every toast: a stack of boxes cut to their text
+			   reads as ragged, and a rail of one width reads as a rail */
+			inline-size: min(24rem, 100%);
+			padding-block: 0.6rem;
+			padding-inline: 0.9rem 0.6rem;
+			border: var(--vui-border-width, 1px) solid var(--_border);
+			border-radius: var(--vui-radius-container, 0.75rem);
+			background: var(--_bg);
+			color: var(--_fg);
+			box-shadow: var(--vui-shadow-overlay, 0 8px 24px -12px rgb(0 0 0 / 0.35));
+			overflow: clip; /* so the countdown bar follows the corners */
+			font-size: 0.925rem;
+			line-height: 1.4;
+
+			/* CONTEXT: a toast IS a surface, so its ✕ and anything a slot brings
+			   lift one step and stay visible, exactly as in the dialog panel. No
+			   fallbacks needed: nothing reads them unless base.css is loaded, and
+			   then they are defined. */
+			--vui-control-bg: var(--vui-surface-1);
+			--vui-control-foreground: var(--vui-surface-1-foreground);
+			--vui-control-bg-hover: var(--vui-surface-1-hover);
+			--vui-control-bg-active: var(--vui-surface-1-active);
+			--vui-control-border: var(--vui-surface-1-hover);
+
+			/* IN AND OUT: a fade and a hair of slide. The entry is
+			   @starting-style — the style the browser starts from the first time
+			   it lays the box out — so there is no keyframe, no "added" class and
+			   nothing to schedule. The exit is the same pair of properties under
+			   [data-exiting]; the script removes the node when the transition
+			   ends. --vui-transition is 0ms under prefers-reduced-motion
+			   (base.css), which makes both instant. */
+			opacity: 1;
+			translate: 0 0;
+			transition:
+				opacity var(--vui-transition) ease-out,
+				translate var(--vui-transition) ease-out;
+		}
+		@starting-style {
+			.vui-toast__item {
+				opacity: 0;
+				translate: 0 var(--_from);
+			}
+		}
+		.vui-toast__item[data-exiting] {
+			opacity: 0;
+			translate: 0 var(--_from);
+		}
+
+		/* THE VARIANT TINTS THE SURFACE; it does not fill it. A filled toast
+		   would need a control context of its own for every role — and the ghost
+		   ✕'s resting color could not follow it at all (D9) — while a 12% tint of
+		   the role color keeps ONE context, keeps the text at surface contrast on
+		   every theme, and still reads as "this one is an error" across the room.
+		   The full role color goes where it cannot cost legibility: the icon and
+		   the countdown bar. */
+		.vui-toast__item[data-variant="primary"] {
+			--_tint: var(--vui-primary, AccentColor);
+		}
+		.vui-toast__item[data-variant="accent"] {
+			--_tint: var(--vui-accent, Highlight);
+		}
+		.vui-toast__item[data-variant="destructive"] {
+			--_tint: var(--vui-destructive, color-mix(in srgb, red 75%, CanvasText));
+		}
+		.vui-toast__item[data-variant="warning"] {
+			--_tint: var(--vui-warning, Mark);
+		}
+		.vui-toast__item[data-variant="success"] {
+			--_tint: var(--vui-success, color-mix(in srgb, green 70%, CanvasText));
+		}
+		.vui-toast__item[data-variant] {
+			--_bg: color-mix(in srgb, var(--_tint) 12%, var(--vui-surface, Canvas));
+			--_border: color-mix(in srgb, var(--_tint) 35%, transparent);
+			--_accent: var(--_tint);
+		}
+		.vui-toast__item[data-variant] .vui-toast__icon {
+			color: var(--_accent);
+		}
+
+		.vui-toast__icon {
+			flex: none;
+			display: flex;
+			align-items: center;
+			font-size: 1.125rem;
+			line-height: 1;
+		}
+		.vui-toast__message {
+			flex: 1;
+			min-width: 0;
+			overflow-wrap: break-word;
+		}
+		/* the repeat badge: same lift as a control on this surface, so a toast
+		   that says "×3" still reads as one object */
+		.vui-toast__count {
+			flex: none;
+			padding: 0 0.4em;
+			border-radius: 9999px;
+			background: var(--vui-surface-1, ButtonFace);
+			color: var(--vui-muted-foreground, GrayText);
+			font-size: 0.75rem;
+			font-variant-numeric: tabular-nums;
+		}
+		.vui-toast__action {
+			flex: none;
+		}
+		.vui-toast__close {
+			/* placement only — the look is .vui-btn--ghost.--icon */
+			flex: none;
+			margin-inline-start: -0.25rem;
+		}
+		/* The countdown, drawn along the block-end edge and depleting toward the
+		   inline end. It is decoration: the clock that actually dismisses is a
+		   setTimeout, so this may be hidden (`progress: false`, a sticky toast)
+		   or killed by a page's own CSS with no effect on the behavior. */
+		.vui-toast__progress {
+			position: absolute;
+			inset-inline: 0;
+			inset-block-end: 0;
+			block-size: 2px;
+			background: var(--_accent);
+			transform-origin: 0 50%;
+			animation: vui-toast-countdown var(--_ttl, 0ms) linear forwards;
+		}
+		:scope:dir(rtl) .vui-toast__progress {
+			transform-origin: 100% 50%;
+		}
+		/* hover or focus anywhere in the region holds every clock — the script
+		   sets the flag, and the bars read the same one */
+		:scope[data-paused] .vui-toast__progress {
+			animation-play-state: paused;
+		}
+		/* wins over the base layer's `display` on a hidden control — but never
+		   over a `hidden="until-found"` box (a tabs panel in a slot), which the
+		   UA's own rule is careful about in exactly the same way */
+		:scope [hidden]:not([hidden="until-found"]) {
+			display: none;
+		}
+	}
+}
+/* the countdown — @keyframes is an at-rule, so it cannot live inside @scope */
+@keyframes vui-toast-countdown {
+	from {
+		scale: 1 1;
+	}
+	to {
+		scale: 0 1;
+	}
+}
+</style>
+
+<script type="module">
+import {
+	createView,
+	delegate,
+	fromTemplate,
+	mount,
+	observable,
+	refs,
+} from "@marianmeres/vanilla";
+
+/** Fill a slot from a `Slot` value: text | element | view (mounted + tracked). */
+function fill(track, slot, content) {
+	if (content == null) return;
+	if (typeof content === "string") slot.textContent = content;
+	else if (content instanceof Node) slot.replaceChildren(content);
+	else mount(track, slot, content);
+}
+
+const POSITIONS = [
+	"top-start",
+	"top",
+	"top-end",
+	"bottom-start",
+	"bottom",
+	"bottom-end",
+];
+/** The design-tokens roles a toast can be tinted with (D9's five, no ghost). */
+const VARIANTS = ["primary", "accent", "destructive", "warning", "success"];
+/** Which of them is urgent enough to interrupt a screen reader. */
+const ASSERTIVE = ["destructive", "warning"];
+const ITEM = ".vui-toast__item";
+
+export function createToast({
+	position = "top-end",
+	ttl = 4000,
+	max = 5,
+	closeButton = true,
+	progress = true,
+	ariaLabel,
+	onShow,
+	onDismiss,
+} = {}) {
+	return createView((track) => {
+		const el = fromTemplate("tpl-vui-toast");
+		const count = observable(0);
+		el.dataset.position = POSITIONS.includes(position) ? position : "top-end";
+		if (ariaLabel) el.setAttribute("aria-label", ariaLabel);
+		// destroy() removes the node; nothing reports that, so settle the
+		// observable ourselves (no callback — teardown is not a dismissal).
+		track(() => count.set(0));
+
+		/** The live toasts, oldest first — insertion order IS the capacity order. */
+		const entries = new Map();
+		/** Dismissed, still playing their exit: kept so destroy() reaches them. */
+		const exiting = new Set();
+		let seq = 0;
+		let paused = false;
+
+		/* ---- the top layer ------------------------------------------------- */
+		// `popover="manual"` for the top layer and nothing else — no light
+		// dismiss, no Esc, no invoker. Guarded because the region degrades
+		// gracefully without the API: it is a `position: fixed` box either way.
+		const canPopover = "showPopover" in el;
+		const isShown = () => canPopover && el.matches(":popover-open");
+		/**
+		 * Show the region — and RE-show it when it is already up. The top layer is
+		 * ordered by entry, so a modal dialog (or another popover) opened after us
+		 * paints over the toasts until we re-enter it. Skipped while focus is
+		 * inside: hiding a popover moves focus, and a reader mid-✕ keeps it.
+		 */
+		const raise = () => {
+			if (!canPopover) return;
+			if (isShown()) {
+				if (el.contains(document.activeElement)) return;
+				el.hidePopover();
+			}
+			el.showPopover();
+		};
+
+		/* ---- the clocks ---------------------------------------------------- */
+		// One setTimeout per toast, and one CSS animation per countdown bar, held
+		// and released together off the `data-paused` flag. The timeout is what
+		// dismisses; the bar only draws it.
+		const arm = (entry) => {
+			if (!entry.ttl || paused || entry.timer) return;
+			entry.startedAt = performance.now();
+			entry.timer = setTimeout(() => api.dismiss(entry.id), entry.remaining);
+		};
+		const disarm = (entry) => {
+			if (!entry.timer) return;
+			clearTimeout(entry.timer);
+			entry.timer = 0;
+			entry.remaining = Math.max(
+				0,
+				entry.remaining - (performance.now() - entry.startedAt),
+			);
+		};
+		const setPaused = (next) => {
+			if (paused === next) return;
+			paused = next;
+			el.toggleAttribute("data-paused", next);
+			for (const entry of entries.values()) next ? disarm(entry) : arm(entry);
+		};
+
+		/** Restart the bar without touching the CSS: it IS a running animation. */
+		const rewind = (entry) => {
+			for (const a of entry.refs.progress.getAnimations()) a.currentTime = 0;
+		};
+
+		const report = (entry, name) => {
+			const detail = {
+				id: entry.id,
+				count: entry.count,
+				variant: entry.variant,
+				el: entry.el,
+			};
+			(name === "show" ? onShow : onDismiss)?.(entry.item);
+			el.dispatchEvent(
+				new CustomEvent(`vui:${name}`, { bubbles: true, detail }),
+			);
+		};
+
+		/** Take the node out for good — the exit is over (or was never going to end). */
+		const finish = (entry) => {
+			if (!exiting.delete(entry)) return; // already gone; both routes are safe
+			clearTimeout(entry.exitTimer);
+			entry.el.removeEventListener("transitionend", entry.onEnd);
+			entry.el.remove();
+			entry.unsubs.forEach((u) => u()); // a view in a slot dies with its toast
+			if (!el.children.length && isShown()) el.hidePopover();
+		};
+
+		const api = {
+			el,
+			count,
+
+			show(message, opts = {}) {
+				const id = String(
+					opts.id ??
+						(typeof message === "string" ? message : `vui-toast-${++seq}`),
+				);
+
+				// Same id, still showing: one toast, a ×N badge and a fresh clock.
+				// The newest occurrence decides how long it stays.
+				const live = entries.get(id);
+				if (live) {
+					live.count++;
+					live.refs.count.textContent = `×${live.count}`;
+					live.refs.count.hidden = false;
+					disarm(live);
+					live.remaining = live.ttl;
+					rewind(live);
+					arm(live);
+					raise();
+					report(live, "show");
+					return live.item;
+				}
+
+				const item = fromTemplate("tpl-vui-toast-item");
+				const r = refs(item);
+				const variant = VARIANTS.includes(opts.variant) ? opts.variant : "";
+				const life = Math.max(0, opts.ttl ?? ttl);
+				const entry = {
+					id,
+					el: item,
+					refs: r,
+					variant,
+					count: 1,
+					ttl: life,
+					remaining: life,
+					timer: 0,
+					startedAt: 0,
+					exitTimer: 0,
+					unsubs: [],
+				};
+				// a tracker per TOAST: a dismissed one tears down its own slots,
+				// and destroy() runs whatever is still standing
+				const localTrack = (unsub) => (entry.unsubs.push(unsub), unsub);
+
+				item.dataset.id = id;
+				if (variant) item.dataset.variant = variant;
+				// polite by default (the region says so); urgent enough to
+				// interrupt, and it announces itself on insertion
+				if (ASSERTIVE.includes(variant)) item.setAttribute("role", "alert");
+
+				fill(localTrack, r.message, message);
+				if (opts.icon != null) {
+					fill(localTrack, r.icon, opts.icon);
+					r.icon.hidden = false;
+				}
+				if (opts.action != null) {
+					fill(localTrack, r.action, opts.action);
+					r.action.hidden = false;
+				}
+				r.closeButton.hidden = !(opts.closeButton ?? closeButton);
+				if (life) {
+					item.style.setProperty("--_ttl", `${life}ms`);
+					r.progress.hidden = !progress;
+				}
+
+				entry.item = {
+					id,
+					el: item,
+					get count() {
+						return entry.count;
+					},
+					dismiss: () => api.dismiss(id),
+				};
+
+				entries.set(id, entry);
+				if (!el.isConnected) document.body.append(el);
+				el.append(item); // @starting-style plays the entry
+				raise();
+				count.set(entries.size);
+				arm(entry);
+				report(entry, "show");
+
+				// over capacity: the oldest goes, which is the first key in
+				if (max > 0) {
+					while (entries.size > max) api.dismiss(entries.keys().next().value);
+				}
+				return entry.item;
+			},
+
+			dismiss(id) {
+				const entry = entries.get(String(id));
+				if (!entry) return;
+				entries.delete(entry.id);
+				count.set(entries.size);
+				disarm(entry);
+				exiting.add(entry);
+				entry.el.dataset.exiting = ""; // → the exit transition
+
+				// Removed when the transition ends — or at the net, whichever comes
+				// first: a page whose CSS kills transitions (a blanket
+				// reduced-motion reset does exactly that) fires no `transitionend`,
+				// and the node still has to go. The net is read off the box, so it
+				// is right whatever the page made the duration, 0 included.
+				entry.onEnd = (e) => {
+					if (e.target === entry.el) finish(entry);
+				};
+				entry.el.addEventListener("transitionend", entry.onEnd);
+				const secs = parseFloat(getComputedStyle(entry.el).transitionDuration) ||
+					0;
+				entry.exitTimer = setTimeout(
+					() => finish(entry),
+					// no transition at all (a reset, prefers-reduced-motion) fires
+					// no `transitionend` either, so the net is the ONLY route: take
+					// it on the next task rather than sitting on a dead node
+					secs ? secs * 1000 + 50 : 0,
+				);
+
+				report(entry, "dismiss");
+			},
+
+			clear() {
+				for (const id of [...entries.keys()]) api.dismiss(id);
+			},
+		};
+
+		// the ✕ — its own data-on, in the item template
+		track(
+			delegate(el, {
+				dismissClicked: (e) => {
+					const item = e.target.closest(ITEM);
+					if (item) api.dismiss(item.dataset.id);
+				},
+			}),
+		);
+
+		// HOLD THE CLOCKS while the pointer is over the region or the keyboard is
+		// in it. Listened for on the root directly, NOT through `data-on`:
+		// `delegate` resolves an event to the nearest `[data-on]` ancestor, so the
+		// ✕ (and anything a slot brings, its own data-scope included) would shadow
+		// the region and a toast left on the ✕ would stay paused forever. Pausing
+		// is the region's business, so it listens for itself.
+		// `mouseout` / `focusout` carry where the pointer or the focus WENT, which
+		// is the only way to tell "moved to this toast's own ✕" from "left".
+		const enter = (e) => {
+			if (e.target.closest?.(ITEM)) setPaused(true);
+		};
+		const leave = (e) => {
+			if (!e.relatedTarget?.closest?.(ITEM)) setPaused(false);
+		};
+		for (
+			const [type, fn] of [
+				["mouseover", enter],
+				["mouseout", leave],
+				["focusin", enter],
+				["focusout", leave],
+			]
+		) {
+			el.addEventListener(type, fn);
+			track(() => el.removeEventListener(type, fn));
+		}
+
+		// destroy(): every clock stopped, every slotted view destroyed — the node
+		// itself goes with the region (createView removes it).
+		track(() => {
+			for (const entry of [...entries.values(), ...exiting]) {
+				disarm(entry);
+				clearTimeout(entry.exitTimer);
+				entry.unsubs.forEach((u) => u());
+			}
+			entries.clear();
+			exiting.clear();
+		});
+
+		return api;
+	});
+}
+</script>

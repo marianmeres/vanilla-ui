@@ -16,9 +16,9 @@
  *      this module's own URL, so the kit works from wherever it is served (a sibling
  *      folder, a vendored copy, a CDN) with no configuration.
  *   3. **Loads them with types** — {@link loadAll} / {@link loadDialog} /
- *      {@link loadPopover} / {@link loadDisclosure} / {@link loadTabs} return the
- *      factories typed by the interfaces declared here (the `.html` files are plain
- *      JS; the types live in this file).
+ *      {@link loadPopover} / {@link loadDisclosure} / {@link loadTabs} /
+ *      {@link loadToast} return the factories typed by the interfaces declared
+ *      here (the `.html` files are plain JS; the types live in this file).
  *   4. **Installs the base style layer** ({@link loadStyles}, called by every loader)
  *      — `components/base.css`: the design-token vocabulary every component reads
  *      and the kit's control primitives (`.vui-btn`, `.vui-input`). Buttons are
@@ -462,6 +462,118 @@ export async function loadTabs(base: string = COMPONENTS_BASE): Promise<CreateTa
 }
 
 /* ============================================================================
+ * toast — components/toast.html
+ * ========================================================================== */
+
+/**
+ * Where the toast rail sits. The block half is the physical side; the inline
+ * half is logical (`start` / `end` follow the writing direction) — the same
+ * vocabulary as {@link PopoverPlacement}.
+ */
+export type ToastPosition =
+	| "top-start"
+	| "top"
+	| "top-end"
+	| "bottom-start"
+	| "bottom"
+	| "bottom-end";
+
+/**
+ * Which design-tokens role tints a toast. It **tints** the surface (a 12% wash,
+ * the role color on the edge, the icon and the countdown bar) rather than
+ * filling it: the text keeps surface contrast on every theme, and one control
+ * context serves every variant — see `docs/DESIGN.md` §D13.
+ */
+export type ToastVariant =
+	| "primary"
+	| "accent"
+	| "destructive"
+	| "warning"
+	| "success";
+
+/** Options of one toast — the second argument of {@link ToastView.show}. */
+export interface ToastOptions {
+	/** Tint it with a semantic role. Omit for the plain surface. */
+	variant?: ToastVariant;
+	/** This toast's life in ms; `0` makes it sticky. Default: the region's `ttl`. */
+	ttl?: number;
+	/**
+	 * Identity. Showing the same `id` while it is still up bumps a `×N` badge and
+	 * restarts its clock instead of stacking a second copy. Defaults to the
+	 * message when the message is a string — so repeating `show("Saved")`
+	 * dedupes with no bookkeeping — and to a fresh id otherwise.
+	 */
+	id?: string;
+	/** A glyph before the message — see {@link Slot}. Takes the variant's color. */
+	icon?: Slot;
+	/** A control after it — see {@link Slot}. Typically {@link button}. */
+	action?: Slot;
+	/** Render the ✕. Default: the region's `closeButton`. */
+	closeButton?: boolean;
+}
+
+/** The handle {@link ToastView.show} returns (and the callbacks receive). */
+export interface ToastItem {
+	/** Its identity — what {@link ToastView.dismiss} takes. */
+	id: string;
+	/** The toast element (`.vui-toast__item`). */
+	el: HTMLElement;
+	/** How many times this id has been shown while up. Read live. */
+	readonly count: number;
+	/** Dismiss it now. No-op once it is gone. */
+	dismiss(): void;
+}
+
+/** Props of {@link CreateToast} — the region. All optional. */
+export interface ToastProps {
+	/** Which corner (or edge) the rail runs down. Default `"top-end"`. */
+	position?: ToastPosition;
+	/** Default life of a toast in ms; `0` makes them sticky. Default `4000`. */
+	ttl?: number;
+	/** Most toasts at once — the oldest is dismissed. `0` = no cap. Default `5`. */
+	max?: number;
+	/** Default for a toast's ✕. Default `true`. */
+	closeButton?: boolean;
+	/** Draw the countdown bar. Default `true`. */
+	progress?: boolean;
+	/** Accessible name for the region. */
+	ariaLabel?: string;
+	/** Called per `show()` — a repeat of a live id included (read `count`). */
+	onShow?: (toast: ToastItem) => void;
+	/** Called per dismissal, whatever caused it: the ✕, the clock, `dismiss()`, `clear()`, the cap. */
+	onDismiss?: (toast: ToastItem) => void;
+}
+
+/** The view returned by {@link CreateToast}. */
+export interface ToastView extends ViewInstance {
+	/**
+	 * The region (`data-scope="toast"`, `popover="manual"`). The first `show()`
+	 * appends it to `<body>` if it is not in the document, and shows it in the
+	 * **top layer** — so a toast is never buried by a modal dialog's backdrop or
+	 * a page's `z-index`. Mount it yourself anywhere if you'd rather.
+	 */
+	el: HTMLElement;
+	/** How many toasts are showing (a dismissed one leaves at once, before its exit plays). */
+	count: ReadonlyObservable<number>;
+	/** Put a message in the region. Returns its handle — the same one for a repeat of a live id. */
+	show(message?: Slot, opts?: ToastOptions): ToastItem;
+	/** Dismiss one by `id`. No-op for an unknown or already-dismissed one. */
+	dismiss(id: string): void;
+	/** Dismiss all of them (each reports, as its own dismissal). */
+	clear(): void;
+}
+
+/** The toast factory exported by `components/toast.html`. */
+export type CreateToast = (props?: ToastProps) => ToastView;
+
+/** Load `components/toast.html` and return its typed factory. Idempotent per URL. */
+export async function loadToast(base: string = COMPONENTS_BASE): Promise<CreateToast> {
+	await loadStyles(base);
+	const mod = await loadComponent(componentUrl("toast", base));
+	return mod.createToast as CreateToast;
+}
+
+/* ============================================================================
  * All of it
  * ========================================================================== */
 
@@ -471,6 +583,7 @@ export interface VanillaUi {
 	createDisclosure: CreateDisclosure;
 	createPopover: CreatePopover;
 	createTabs: CreateTabs;
+	createToast: CreateToast;
 }
 
 /**
@@ -483,12 +596,13 @@ export async function loadAll(base: string = COMPONENTS_BASE): Promise<VanillaUi
 	// first, and awaited: it declares the cascade layer ORDER the components' own
 	// `@layer vui.components` blocks slot into
 	await loadStyles(base);
-	const [createDialog, createDisclosure, createPopover, createTabs] = await Promise
-		.all([
+	const [createDialog, createDisclosure, createPopover, createTabs, createToast] =
+		await Promise.all([
 			loadDialog(base),
 			loadDisclosure(base),
 			loadPopover(base),
 			loadTabs(base),
+			loadToast(base),
 		]);
-	return { createDialog, createDisclosure, createPopover, createTabs };
+	return { createDialog, createDisclosure, createPopover, createTabs, createToast };
 }
