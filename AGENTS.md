@@ -10,6 +10,8 @@ vanilla-JS prototyping; published to JSR + npm.
 - **Test**: `deno task test` (anatomy + index) · `deno task test:browser` (component behavior in
   headless Chrome) | **Type-check**: `deno check src/ tests/ scripts/`
 - **Build**: `deno task build` (→ `dist/mod.js`, **tracked** — the file host import maps point at)
+- **Prove a change is invisible**: `deno task fingerprint` → change → `deno task fingerprint
+  --check` (rendered text + every bounding box; see `scripts/render-fingerprint.ts`)
 - **Gallery**: `deno task serve` → http://localhost:4507/gallery/ (the kit's living test suite)
 - **Themes**: `deno task themes:build` (→ `gallery/themes/*.css`) | **Release**: `deno task rp`
 
@@ -27,6 +29,8 @@ tests/components.test.ts  — anatomy lint of every components/*.html (linkedom,
 tests/mod.test.ts         — index: URL resolution, re-exports
 tests/browser/<name>.html — behavior test page per component (real Chrome, via scripts/browser-test.ts)
 scripts/browser-test.ts   — serves the repo, drives headless Chrome (DevTools protocol), reads #result
+scripts/render-fingerprint.ts — captures what a page RENDERED (text + every box); --check diffs it
+scripts/_chrome.ts        — the headless-Chrome harness both of the above sit on
 docs/DESIGN.md            — rationale & rules (read before adding a component)
 README.md · API.md        — human docs
 ```
@@ -139,8 +143,12 @@ README.md · API.md        — human docs
       `--minimum-dependency-age 0` for that run rather than lowering it in `deno.json`.
 - [ ] **`deno fmt` covers the `.html` files too** — the embedded `<style>` and `<script>`
       bodies included, which is why a component's inline module sits at column 0. The repo is
-      clean (`deno fmt --check`, 23 files); keep it that way, and keep a reformat out of a
-      feature commit so it never buries the real diff.
+      clean (`deno fmt --check`); keep it that way, and keep a reformat out of a feature
+      commit so it never buries the real diff.
+- [ ] Changing something that should look **identical** afterwards (a reformat, a selector
+      rewritten to mean the same thing, a base-layer refactor)? `deno task fingerprint`
+      before, `deno task fingerprint --check` after. The browser tests check behavior; this
+      is the one that checks layout, and it is what proved the HTML reformat was a no-op.
 
 ## Documentation Index
 

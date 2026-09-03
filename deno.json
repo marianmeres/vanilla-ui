@@ -20,6 +20,7 @@
 		"test": "deno test --allow-read",
 		"test:watch": "deno test --allow-read --watch",
 		"test:browser": "deno run -A scripts/browser-test.ts",
+		"fingerprint": "deno run -A scripts/render-fingerprint.ts",
 		"build": "deno run -A jsr:@marianmeres/deno-build --esbuild --outdir dist --outfile mod.js",
 		"build:watch": "deno run -A jsr:@marianmeres/deno-build --esbuild --outdir dist --outfile mod.js --watch",
 		"serve": "deno run --allow-net --allow-read jsr:@std/http/file-server . --port 4507",
