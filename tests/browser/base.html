@@ -1,0 +1,206 @@
+<!doctype html>
+<!--
+	Browser test for components/base.css — run by `deno task test:browser`
+	(scripts/browser-test.ts drives headless Chrome and reads #result).
+
+	Not a component: no factory, no view. The component pages cover the base
+	layer INSIDE a component (a bare <button> in a dialog slot, an item in a
+	menu); this one covers it on markup outside any component — a badge in a
+	card, a toolbar row, an inline menu — where only base's own rules apply.
+
+	Contract: one line per check — `ok <name>` / `FAIL <name> (detail)` — and a
+	final `DONE` (or `ERROR …` on an uncaught exception).
+-->
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<title>base · browser test</title>
+		<link rel="icon" href="data:," />
+		<script type="importmap">
+		{
+			"imports": {
+				"@marianmeres/vanilla": "../../dist/mod.js",
+				"@marianmeres/vanilla-ui": "../../dist/mod.js"
+			}
+		}
+		</script>
+	</head>
+	<body>
+		<!-- a consumer's own unlayered rule: it must still be able to SHOW a hidden
+		     element (a fade-out keeps the box while the opacity goes) -->
+		<style>
+		.fade[hidden] {
+			display: inline-flex;
+			opacity: 0;
+		}
+		</style>
+
+		<pre id="result"></pre>
+
+		<!-- the reported case — a badge in a card, hidden by a binding — and every
+		     other base class that declares a `display` of its own, plus the bare
+		     controls the container hook lays out. Nothing here is a component. -->
+		<template id="tpl-page">
+			<div class="vui-card" data-scope="page">
+				<span class="vui-badge vui-badge--primary" data-ref="badge"
+					data-bind="hidden:notAdmin">admin</span>
+				<div class="vui-row" data-ref="row" hidden>
+					<button type="button">in a row</button>
+				</div>
+				<div class="vui-alert" data-ref="alert" hidden>alert</div>
+				<div class="vui-menu" data-ref="menu" hidden>
+					<button type="button" role="menuitem">item</button>
+				</div>
+				<div class="vui-field" data-ref="field" hidden>
+					<label>x</label>
+					<input />
+				</div>
+				<div class="vui-field">
+					<label>y</label>
+					<input />
+					<span class="vui-help" data-ref="help" hidden>help</span>
+				</div>
+				<div class="vui-tablist" data-ref="tablist" hidden>
+					<button type="button" class="vui-tab">tab</button>
+				</div>
+				<button type="button" class="vui-tab" data-ref="tab" hidden>tab</button>
+				<button type="button" class="vui-btn" data-ref="btn" hidden>btn</button>
+				<input type="checkbox" class="vui-switch" data-ref="switch" hidden />
+				<details>
+					<summary class="vui-summary" data-ref="summary" hidden>sum</summary>
+					x
+				</details>
+				<button type="button" class="vui-menuitem" data-ref="menuitem"
+					hidden>mi</button>
+				<div class="vui-row">
+					<button type="button" data-ref="bare" hidden>bare</button>
+					<button type="button" role="menuitem" data-ref="bareItem" hidden>
+						bare item
+					</button>
+				</div>
+				<div class="vui-tabs__panel" data-ref="findable" hidden="until-found">
+					findable
+				</div>
+				<span class="vui-badge fade" data-ref="fade" hidden>fade</span>
+			</div>
+		</template>
+
+		<script type="module">
+		import { applyBindings, fromTemplate, loadStyles, refs } from "@marianmeres/vanilla-ui";
+
+		const out = [];
+		const check = (name, cond, detail = "") =>
+			out.push(cond ? `ok ${name}` : `FAIL ${name}${detail ? ` (${detail})` : ""}`);
+		const flush = () => (document.getElementById("result").textContent = out.join("\n"));
+		const display = (el) => getComputedStyle(el).display;
+
+		try {
+			await loadStyles();
+			check("base layer installed", !!document.getElementById("vui-base"));
+
+			/* ---- [hidden] wins over the layer's own `display` ------------------
+			   The UA's `[hidden] { display: none }` loses to any author `display`,
+			   so without base's own rule every class below would stay on screen. */
+			const page = fromTemplate("tpl-page");
+			document.body.append(page);
+			const r = refs(page);
+
+			// the reported repro: vanilla's `hidden` binding on a badge in a card
+			applyBindings(page, { notAdmin: true });
+			check(
+				"a badge hidden by data-bind is display:none",
+				r.badge.hidden && display(r.badge) === "none",
+				display(r.badge),
+			);
+			applyBindings(page, { notAdmin: false });
+			check(
+				"…and inline-flex again when shown",
+				display(r.badge) === "inline-flex",
+				display(r.badge),
+			);
+
+			// every base class with a `display` of its own
+			for (
+				const [name, el, shown] of [
+					["row", r.row, "flex"],
+					["alert", r.alert, "flex"],
+					["menu", r.menu, "flex"],
+					["field", r.field, "block"],
+					["help (a two-class rule)", r.help, "block"],
+					["tablist", r.tablist, "flex"],
+					["tab", r.tab, "inline-flex"],
+					["btn", r.btn, "inline-flex"],
+					["switch", r.switch, "inline-block"],
+					["summary", r.summary, "flex"],
+					["menuitem", r.menuitem, "flex"],
+				]
+			) {
+				check(
+					`.vui-${name}[hidden] is display:none`,
+					display(el) === "none",
+					display(el),
+				);
+				el.hidden = false;
+				check(`…and ${shown} when shown`, display(el) === shown, display(el));
+				el.hidden = true;
+			}
+
+			// the bare controls the container hook lays out, in a row on the page
+			check(
+				"a bare <button hidden> in a .vui-row is display:none",
+				display(r.bare) === "none",
+				display(r.bare),
+			);
+			check(
+				"a bare [role=menuitem][hidden] in one too",
+				display(r.bareItem) === "none",
+				display(r.bareItem),
+			);
+			r.bare.hidden = false;
+			// `inline-flex` from the default, blockified to `flex` by the row it is a
+			// flex item of — what matters is that the kit lays it out again
+			check(
+				"…and laid out again when shown (the default, blockified by the row)",
+				display(r.bare) === "flex",
+				display(r.bare),
+			);
+
+			// a base element with no vui- ancestor at all
+			const loose = document.createElement("span");
+			loose.className = "vui-badge";
+			loose.hidden = true;
+			document.body.append(loose);
+			check(
+				"a .vui-badge[hidden] straight on the page is display:none",
+				display(loose) === "none",
+				display(loose),
+			);
+			loose.remove();
+
+			// never over until-found: the browser keeps a findable box rendered
+			check(
+				"hidden=until-found is NOT display:none",
+				display(r.findable) !== "none",
+				display(r.findable),
+			);
+			if (CSS.supports("content-visibility", "hidden-matchable")) {
+				const cv = getComputedStyle(r.findable).contentVisibility;
+				check("…it stays matchable", cv === "hidden-matchable", cv);
+			}
+
+			// layered, so a consumer's unlayered rule still shows one
+			check(
+				"a consumer's unlayered [hidden] rule wins (a fade-out keeps its box)",
+				display(r.fade) === "inline-flex",
+				display(r.fade),
+			);
+
+			page.remove();
+			out.push("DONE");
+		} catch (e) {
+			out.push("ERROR " + (e && e.stack || e));
+		}
+		flush();
+		</script>
+	</body>
+</html>

@@ -89,8 +89,30 @@ dlg.open();
 ```
 
 `loadAll()` finds the `.html` files relative to **where `mod.js` is served from**
-(`../components/`), so no paths to configure. Serving them from elsewhere (a CDN, a vendored
-folder)? Pass the base: `loadAll("https://cdn.example/vanilla-ui/components/")`.
+(`../components/`), so no paths to configure. Serving them from elsewhere (a vendored folder,
+say)? Pass the base: `loadAll("https://cdn.example/vanilla-ui/components/")`.
+
+**Off a CDN**, with nothing copied: jsDelivr's npm mirror serves the published package with
+CORS on — `mod.js` as JavaScript, the `.html` files as `text/plain`, which `loadComponent` is
+happy with (it fetches text and builds its own module) — and `loadAll()` finds `components/`
+from there by itself. The npm build keeps `@marianmeres/vanilla` a **bare import**, so the map
+still names both specifiers — and that is the point: point `@marianmeres/vanilla` at your own
+copy (or at vanilla's own CDN file, as below) and the kit, plus every component it fetches,
+binds to it. One copy, as above.
+
+```html
+<script type="importmap">
+{
+	"imports": {
+		"@marianmeres/vanilla": "https://cdn.jsdelivr.net/npm/@marianmeres/vanilla@1/dist/mod.js",
+		"@marianmeres/vanilla-ui": "https://cdn.jsdelivr.net/npm/@marianmeres/vanilla-ui@0.4/dist/mod.js"
+	}
+}
+</script>
+```
+
+jsr.io is a registry, not a CDN: a browser's module request for a file there gets an HTML page
+back, and the MIME type is refused.
 
 Components also emit **`CustomEvent`s** on their root (`vui:close` here), so a plain listener
 works too — handy when the dialog is created far from where its result is needed.
@@ -128,6 +150,9 @@ createPopover({
 });
 </script>
 ```
+
+The anchor need not be in the document yet: a popover built inside a `createView` mountFn,
+before the view is appended, places itself after the anchor on the first click (or on `open()`).
 
 `role: "tooltip"` is the other mode, on the same surface and the same placement: hover or
 keyboard-focus the anchor and it shows, and the anchor gets `aria-describedby` rather than

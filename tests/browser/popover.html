@@ -59,6 +59,15 @@
 			</div>
 		</template>
 
+		<!-- a view of the consumer's own with the anchor inside it — built detached,
+		     the way createView builds everything, and appended afterwards -->
+		<template id="tpl-view">
+			<div data-scope="view">
+				<button type="button" data-ref="btn"
+					style="position: fixed; top: 100px; left: 100px">view</button>
+			</div>
+		</template>
+
 		<script type="module">
 		import {
 			button,
@@ -66,6 +75,7 @@
 			delegate,
 			fromTemplate,
 			loadAll,
+			refs,
 		} from "@marianmeres/vanilla-ui";
 
 		const out = [];
@@ -395,6 +405,67 @@
 					a.nextElementSibling === p.el && p.isOpen.get() === true,
 				);
 				p.destroy();
+				a.remove();
+			}
+			// built inside a createView mountFn, the way a vanilla page builds
+			// everything: the anchor is not in the document while the view is
+			// being built, and the native invoker shows only a target that is —
+			// silently nothing otherwise. So the popover places itself on the
+			// first click, keyboard included (Enter/Space on a button is a click).
+			{
+				const view = createView((track) => {
+					const el = fromTemplate("tpl-view");
+					const r = refs(el);
+					const p = createPopover({ anchor: r.btn, body: "from a view" });
+					track(p.destroy);
+					return { el, p, btn: r.btn };
+				});
+				check(
+					"createView: nothing placed while the view is detached",
+					!view.p.el.isConnected,
+				);
+				document.body.append(view.el);
+				w = toggled(view.p);
+				view.btn.click();
+				await w;
+				check(
+					"createView: the first click on the anchor opens it (native invoker)",
+					view.p.isOpen.get() === true && view.p.el.matches(":popover-open"),
+				);
+				check(
+					"createView: placed right after the anchor, inside the view",
+					view.btn.nextElementSibling === view.p.el && view.el.contains(view.p.el),
+				);
+				w = toggled(view.p);
+				view.btn.click();
+				await w;
+				check("createView: the second click closes it", view.p.isOpen.get() === false);
+				view.destroy();
+				check(
+					"createView: destroy() takes the popover with the view",
+					!view.p.el.isConnected,
+				);
+			}
+			// a parentless anchor appended later — a button() wired before it is placed
+			{
+				const a = button("late");
+				a.style.cssText = "position: fixed; top: 100px; left: 100px";
+				const p = createPopover({ anchor: a, body: "x" });
+				document.body.append(a);
+				w = toggled(p);
+				a.click();
+				await w;
+				check(
+					"a parentless anchor, appended later: the first click opens",
+					p.isOpen.get() === true && a.nextElementSibling === p.el,
+				);
+				w = toggled(p);
+				p.close();
+				await w;
+				p.destroy();
+				a.click();
+				await new Promise((r) => setTimeout(r, 30));
+				check("destroy(): the anchor's click no longer places it", !p.el.isConnected);
 				a.remove();
 			}
 			// a non-button anchor: a click listener instead of the invoker

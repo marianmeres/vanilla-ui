@@ -175,7 +175,10 @@ Absolute URL of the base stylesheet.
 
 `string` — Absolute URL of the `components/` directory, resolved as `../components/` relative
 to the index module's own URL (`src/mod.ts` in Deno, `dist/mod.js` in the browser). This is
-why the kit needs no path configuration when served as a folder.
+why the kit needs no path configuration when served as a folder — or off a CDN: with
+`@marianmeres/vanilla-ui` mapped to
+`https://cdn.jsdelivr.net/npm/@marianmeres/vanilla-ui@0.4/dist/mod.js` it resolves to that
+package's `components/`, which jsDelivr serves with CORS (the README shows the import map).
 
 ---
 
@@ -456,6 +459,18 @@ without painting anything:
 half is the platform's: `.vui-field:has(:user-invalid)` reddens on its own — `:user-invalid`,
 not `:invalid`, so an untouched form does not open in red.
 
+### `hidden` still hides
+
+The UA's `[hidden] { display: none }` loses to **any** author `display` — origin is decided
+before specificity — so on its own a `.vui-badge` (`inline-flex`), a `.vui-row` (`flex`) or a
+bare `<button>` inside one would stay on screen with `hidden` set, and `el.hidden = true`
+(vanilla's `data-bind="hidden:…"`) would silently do nothing. So the base layer carries its own
+`display: none` for any element with a `vui-` class, and any descendant of one, while `hidden`
+is set — layered like the rest, so your own unlayered rule can still show one (a fade-out, say)
+— and never for `hidden="until-found"`, which the browser keeps findable (a tabs panel). Every
+component repeats the rule inside its own `@scope`, and has to: a `display` in
+`vui.components` outranks anything in `vui.base` whatever the specificity.
+
 ### Bare markup inside a component
 
 Any element carrying a `vui-` class is a **container hook**: bare `<button>`, `<input>`,
@@ -615,15 +630,15 @@ measure / flip / clamp — re-run on scroll and resize while open — where it d
 
 **Returns:** `PopoverView`
 
-| Member      | Description                                                                                                                                                        |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `el`        | The `[popover="auto"]` root (`data-scope="popover"`). The factory inserts it right after a connected anchor — the invoker needs it in the document; move it freely |
-| `anchor`    | The anchor it was created with                                                                                                                                     |
-| `isOpen`    | `ReadonlyObservable<boolean>` — settled synchronously by `open()`/`close()`, and by the native `toggle` for every other route                                      |
-| `open()`    | `showPopover()`; inserts `el` after the anchor first if it is not in the document. No-op if open                                                                   |
-| `close()`   | `hidePopover()`. No-op if not open                                                                                                                                 |
-| `toggle()`  | One or the other                                                                                                                                                   |
-| `destroy()` | Runs cleanups (the anchor's attributes, name and invoker link are restored), destroys a mounted `body` view, removes `el`                                          |
+| Member      | Description                                                                                                                                                                                                                                             |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `el`        | The `[popover="auto"]` root (`data-scope="popover"`). The factory puts it right after the anchor — at creation if the anchor is in the document, else on the first click or `open()` — so one built inside a `createView` mountFn works; move it freely |
+| `anchor`    | The anchor it was created with                                                                                                                                                                                                                          |
+| `isOpen`    | `ReadonlyObservable<boolean>` — settled synchronously by `open()`/`close()`, and by the native `toggle` for every other route                                                                                                                           |
+| `open()`    | `showPopover()`; inserts `el` after the anchor first if it is not in the document. No-op if open                                                                                                                                                        |
+| `close()`   | `hidePopover()`. No-op if not open                                                                                                                                                                                                                      |
+| `toggle()`  | One or the other                                                                                                                                                                                                                                        |
+| `destroy()` | Runs cleanups (the anchor's attributes, name and invoker link are restored), destroys a mounted `body` view, removes `el`                                                                                                                               |
 
 **Menu** (`role: "menu"`): the body holds the items — any element with `role="menuitem"`,
 `menuitemcheckbox` or `menuitemradio`, typically `<button>`s in a `.vui-menu` (painted by the

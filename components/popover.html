@@ -71,10 +71,13 @@
 
 	Returns a view: { el, anchor, isOpen, open(), close(), toggle(), destroy() }
 
-	Where `el` goes: the factory inserts it right after a connected anchor — the
-	native invoker needs its target in the document before the first click — and
-	open() does the same for an anchor connected later. Move it anywhere you like
-	afterwards; the top layer handles stacking.
+	Where `el` goes: the factory puts it right after the anchor — at creation if
+	the anchor is already in the document, otherwise on the anchor's first click
+	or on open(), whichever comes first. The native invoker needs its target in
+	the document and silently does nothing for one that is not; an anchor built
+	inside a createView mountFn is not connected until the view is appended, and
+	the click is the earliest moment the kit can be sure. Move it anywhere you
+	like afterwards; the top layer handles stacking.
 
 	Events out (CustomEvent on `el`, bubbling):
 	  "vui:open"    detail: { anchor }        — after the native `toggle`
@@ -288,6 +291,11 @@ export function createPopover({
 		const tip = role === "tooltip";
 		const anchored = anchorPositioning();
 		const open = () => el.matches(":popover-open");
+		/** Put `el` in the document, right after the anchor — where the native
+		 *  invoker needs it. A no-op while the anchor itself is not there. */
+		const land = () => {
+			if (!el.isConnected && anchor.isConnected) anchor.after(el);
+		};
 		el.id = `vui-popover-${++seq}`;
 		if (role) el.setAttribute("role", role);
 		if (menu && anchor.id) el.setAttribute("aria-labelledby", anchor.id);
@@ -378,9 +386,21 @@ export function createPopover({
 			track(() => document.removeEventListener("keydown", onKey, true));
 		} else if (trigger) {
 			if ("popoverTargetElement" in anchor) {
-				// a <button> / <input>: the platform's own invoker relationship
+				// a <button> / <input>: the platform's own invoker relationship.
+				// It shows its target only if the target is in the document and
+				// silently does nothing otherwise — and an anchor built inside a
+				// createView mountFn is not connected yet, so the placement at
+				// creation (below) cannot have happened. A click listener on the
+				// anchor runs BEFORE the button's activation behavior (activation
+				// is post-dispatch), which is exactly early enough to place it
+				// for the very first click; Enter and Space on a button arrive
+				// here too, as its click.
 				anchor.popoverTargetElement = el;
-				track(() => (anchor.popoverTargetElement = null));
+				anchor.addEventListener("click", land, true);
+				track(() => {
+					anchor.removeEventListener("click", land, true);
+					anchor.popoverTargetElement = null;
+				});
 			} else {
 				// anything else: a click listener. showPopover({ source }) below
 				// tells a browser that knows it that this element is the invoker
@@ -486,7 +506,7 @@ export function createPopover({
 			isOpen,
 			open() {
 				if (open()) return;
-				if (!el.isConnected) anchor.after(el);
+				land();
 				// `source`: the invoker, for browsers that take it (nesting, light
 				// dismiss); older ones ignore the argument. A tooltip passes none
 				// — it is not invoked, and an invoker would exempt the anchor from
@@ -505,8 +525,10 @@ export function createPopover({
 		};
 
 		// the native invoker needs its target in the document before the first
-		// click — the one factory in the kit that places its own element
-		if (anchor.isConnected) anchor.after(el);
+		// click — the one factory in the kit that places its own element. For an
+		// anchor that is not in the document yet, the click listener above (or
+		// open()) does it later.
+		land();
 
 		// The root itself carries data-on for its own (non-bubbling) `toggle`;
 		// the rest bubble up from the items. delegate listens on the root, so it

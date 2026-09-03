@@ -331,6 +331,19 @@ Four decisions worth keeping:
   form in red. Both sit on the container, so a component can flag a field without painting a
   control (D9's rule holds even here).
 
+**`hidden` must keep hiding.** The UA's `[hidden] { display: none }` loses to any author
+`display` — origin is decided before specificity — so every class here that declares one
+(`.vui-badge`, `.vui-row`, `.vui-alert`, `.vui-menu`, the controls) would, on its own, leave a
+hidden element on screen, and `el.hidden = true` — vanilla's `data-bind="hidden:…"`, the one
+binding a consumer is told composes with anything — would silently do nothing. Found by exactly
+that: an `admin` badge that appeared on every row. So base carries its own rule, keyed on the
+container hook — the element with a `vui-` class, and any descendant of one, for the bare
+controls the default lays out — layered like everything else (a consumer's unlayered fade-out
+may still show a hidden element), and never for `hidden="until-found"`, which the browser keeps
+findable (D12). The components keep their own copy inside `@scope`, and must: a `display` in
+`vui.components` outranks anything in `vui.base` whatever its specificity, because layer order
+is decided first.
+
 The line this stops at is worth writing down, because this is exactly how a base layer becomes
 the CSS framework D2 forbids: base paints markup a consumer writes and a factory cannot reach.
 A card, an alert, a badge, a table and a field pass that test. A skeleton, an avatar, a
@@ -349,11 +362,18 @@ they are trusted:
    it on click and keyboard, exempts it from light dismiss — without that, the pointerdown that
    closes the popover is followed by the click that reopens it — nests correctly, and exposes
    `aria-expanded` itself. That relationship needs the popover in the document before the first
-   click, which is why `createPopover()` is the one factory in the kit that places its own
-   element (right after a connected anchor; `open()` does the same for an anchor connected
-   later). The native `toggle` event is the single source of truth for state and events, exactly
-   as the dialog's `close` is: `open()`/`close()` mirror it synchronously, every other route
-   (light dismiss, Esc, the invoker, a bare `togglePopover()`) arrives there and nowhere else.
+   click — an invoker whose target is not connected silently does nothing — which is why
+   `createPopover()` is the one factory in the kit that places its own element: right after the
+   anchor, at creation if the anchor is already in the document. It cannot always be. The
+   idiomatic vanilla page builds a view inside a `createView` mountFn and appends it afterwards,
+   so an anchor inside that view is detached at creation and nothing announces when it lands —
+   but the click does. A listener on the anchor runs before the button's activation behavior
+   (activation is post-dispatch), so placing the popover there is early enough for the very
+   first click, keyboard included (Enter and Space on a button are its click); `open()` places
+   it the same way. The native `toggle` event is the single source of truth for state and
+   events, exactly as the dialog's `close` is: `open()`/`close()` mirror it synchronously, every
+   other route (light dismiss, Esc, the invoker, a bare `togglePopover()`) arrives there and
+   nowhere else.
 
 2. **CSS Anchor Positioning does the placement.** The anchor is named, the popover points at it,
    an inline `position-area` says which side, and `position-try-fallbacks` flips it — the other
@@ -495,7 +515,8 @@ that takes a list. Both are worth saying out loud.
   is plainly `hidden`, since a hit there would reveal a panel no tab can select; and the
   three older components' `:scope [hidden] { display: none }` — written for a hidden ✕, but
   reaching every descendant — became `:not([hidden="until-found"])`, exactly the exception the
-  UA's own rule makes. A browser without the feature reads the value as a plain `hidden` and
+  UA's own rule makes, and the one base.css's own `[hidden]` rule makes for markup outside a
+  component (D9). A browser without the feature reads the value as a plain `hidden` and
   the panel is simply hidden, which is what it would have been anyway (contrast the popover,
   D10, where the missing feature would have left a _broken_ box).
 
@@ -673,9 +694,16 @@ The kit is a folder. A prototype uses it by:
    prototype is acceptable and sometimes wanted.
 2. **Serving** the kit repo and the prototype from one static root and pointing the import
    map at `…/vanilla-ui/dist/mod.js`. `loadAll()` finds `../components/` from there.
-3. **A CDN** for the `.html` files, when a page lives where the folder can't be served from.
-   `loadAll(base)` takes the components URL. (JSR's raw file URLs are not verified for CORS;
-   jsDelivr's GitHub endpoint serves any file from a public repo, pinned by tag.)
+3. **A CDN**, when a page lives where the folder can't be served from. jsDelivr's npm mirror
+   serves the published package with CORS — `dist/mod.js` as JavaScript, `base.css` as CSS,
+   the `.html` files as `text/plain` (which `loadComponent` is happy with: it fetches text and
+   builds its own `blob:` module) — and `COMPONENTS_BASE` resolves to `…/components/` from
+   there, so `loadAll()` needs no argument. The npm build keeps `@marianmeres/vanilla` a bare
+   import, so the host maps both specifiers — vanilla to its own copy or to vanilla's CDN
+   file — and the kit binds to that one copy (the README shows the map). jsDelivr's GitHub
+   endpoint serves the tracked `dist/mod.js` instead, which bundles vanilla, so there both
+   specifiers map to the one file as in the local setup. jsr.io is a registry, not a CDN: a
+   browser's module request there gets an HTML page back.
 
 JSR/npm publishing gives the typed index and versioning; it is not the primary consumption
 path for the `.html` files.

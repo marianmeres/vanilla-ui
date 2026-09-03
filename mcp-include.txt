@@ -14,6 +14,9 @@ role="switch" over a checkbox — the platform keeps everything that is not pain
 .vui-row, the focus ring — which also apply to bare <button> and <input> markup inside any
 component, so slot content looks right with no classes; checkboxes, radios and ranges are
 tinted with accent-color rather than redrawn, which is why the input rule does not all:unset.
+Base also keeps the platform's `hidden` hiding — its own [hidden]:not([hidden="until-found"])
+{ display: none } on any vui-classed element or descendant, since the UA's rule loses to the
+layer's own display — so vanilla's data-bind="hidden:…" works on a badge in a card.
 Base also ships a little non-control chrome that reads no control context at all: .vui-badge,
 .vui-alert (the toast's tint treatment standing still, so it can hold ordinary buttons),
 .vui-card and .vui-table (rules, a sticky header if an ancestor scrolls, .vui-num, --zebra). Buttons are styles, not components (button() builds
@@ -23,12 +26,16 @@ the --vui-control-* channel (colors and sizes) on themselves, so a new role is f
 properties and no new rule; the channel's defaults are var() fallbacks at the usage sites, never
 :root declarations, so they resolve at the control. The
 typed index (src/mod.ts) re-exports vanilla, resolves URLs from its own location, and exposes
-loadAll()/load<Name>()/loadStyles(). Primitives so far: dialog on the native <dialog> (its
+loadAll()/load<Name>()/loadStyles() — and works straight off jsDelivr's npm mirror (the npm
+build keeps @marianmeres/vanilla a bare import, so the host's import map names both specifiers
+and the kit binds to that one copy). Primitives so far: dialog on the native <dialog> (its
 `placement` prop — start/end/top/bottom, logical — makes the SAME component a drawer or a
 sheet, since <dialog> already gives the top layer, focus trap, Esc and focus restore; an edge
 placement declares position:fixed so a non-modal drawer still pins to the viewport); popover on
 the native Popover API (popover="auto": top layer, light dismiss, nesting; a <button> anchor is
-the native invoker), placed by CSS Anchor Positioning with position-try flips and by a small JS
+the native invoker, and the popover places itself after the anchor — at creation if it is
+connected, else on the first click, so one built inside a createView mountFn works), placed by
+CSS Anchor Positioning with position-try flips and by a small JS
 measure/flip/clamp where a browser lacks it, and with role "menu" a menu (focus on open,
 arrow/Home/End keys, Tab closes, vui:select with the item's value) whose items base.css paints by
 their role alone (.vui-menu, .vui-menuitem, --destructive), and with role "tooltip" a tooltip on

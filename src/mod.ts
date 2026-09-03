@@ -347,9 +347,12 @@ export interface PopoverProps {
 /** The view returned by {@link CreatePopover}. */
 export interface PopoverView extends ViewInstance {
 	/**
-	 * The `[popover="auto"]` root (`data-scope="popover"`). The factory inserts it
-	 * right after a connected anchor (the native invoker needs it in the document);
-	 * move it anywhere — the top layer handles stacking.
+	 * The `[popover="auto"]` root (`data-scope="popover"`). The factory puts it
+	 * right after the anchor — at creation if the anchor is in the document,
+	 * otherwise on the anchor's first click or on `open()`, whichever comes first
+	 * (the native invoker needs its target in the document, so a popover built
+	 * inside a `createView` mountFn, before the view is appended, still works).
+	 * Move it anywhere — the top layer handles stacking.
 	 */
 	el: HTMLElement;
 	/** The anchor it was created with. */

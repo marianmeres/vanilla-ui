@@ -27,7 +27,7 @@ gallery/themes/           — generated design-tokens CSS + reboot bridge ("vui-
 gallery/reboot.css        — Bootstrap Reboot, vendored; the picker imports it into @layer reset
 tests/components.test.ts  — anatomy lint of every components/*.html (linkedom, no browser)
 tests/mod.test.ts         — index: URL resolution, re-exports
-tests/browser/<name>.html — behavior test page per component (real Chrome, via scripts/browser-test.ts)
+tests/browser/<name>.html — behavior test page per component, plus base.html for base.css on markup outside any component (real Chrome, via scripts/browser-test.ts)
 scripts/browser-test.ts   — serves the repo, drives headless Chrome (DevTools protocol), reads #result
 scripts/render-fingerprint.ts — captures what a page RENDERED (text + every box); --check diffs it
 scripts/_chrome.ts        — the headless-Chrome harness both of the above sit on
@@ -67,15 +67,20 @@ README.md · API.md        — human docs
    → `mount`ed and tracked). No general slot/children system.
 7. **Platform first.** Native `<dialog>`, Popover API, `<details>` before any hand-rolled
    behavior. The popover is the worked example (DESIGN §D10): `popover="auto"` for dismiss and
-   stacking, the anchor as the native invoker, CSS Anchor Positioning for placement — and JS
-   only where the browser has none of it. Its `role: "menu"` and `role: "tooltip"` are **modes
+   stacking, the anchor as the native invoker (it shows only a target that is in the document,
+   so the popover places itself after the anchor — at creation if the anchor is connected, else
+   on its first click, since a `createView` mountFn builds detached), CSS Anchor Positioning
+   for placement — and JS only where the browser has none of it. Its `role: "menu"` and
+   `role: "tooltip"` are **modes
    on that surface, not components** — as `placement` makes the dialog a drawer or a sheet
    (§D14). Before adding a component, check whether it is a prop or a mode on one that exists. The disclosure is the extreme case (§D11): the
    accordion is `<details name>`, the motion is `::details-content`, and there is no aria or
    keyboard glue at all. Tabs is the case with **no** element behind it (§D12) — so it is the
    wiring, and still leans on two platform pieces: `<button role="tab">` for Enter/Space, and
    `hidden="until-found"` panels, which keep an inactive panel findable (`beforematch` selects
-   its tab). That last one is why every component's `[hidden]` rule must exclude
+   its tab). That last one is why every component's `[hidden]` rule — and base's own, which
+   covers base markup outside any component; a component still needs its own, since a
+   `display` in `vui.components` outranks `vui.base` whatever the specificity — must exclude
    `[hidden="until-found"]`. Toast is the one that is a **region**, not a widget (§D13):
    `popover="manual"` for the top layer — **re-entered on every `show()`**, since the layer is
    ordered by entry and a modal dialog opened after it would cover it — `aria-live` on the

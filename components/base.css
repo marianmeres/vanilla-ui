@@ -49,7 +49,8 @@
  *      controls are — they are markup a consumer writes, which a factory can
  *      never reach — and they stop where that argument stops. A card is three
  *      declarations of the container tier; it is not the beginning of a grid
- *      system.
+ *      system. The file ends with one rule that keeps the platform's `hidden`
+ *      hiding, since every `display` above would otherwise beat it.
  *
  * CASCADE LAYERS. Everything here is in `vui.base`; every component's `@scope`
  * block is in `vui.components`. Layered styles lose to unlayered ones whatever
@@ -986,5 +987,32 @@
 			border: 0;
 			border-top: var(--vui-border-width) solid var(--vui-border);
 		}
+	}
+
+	/* ── hidden ──────────────────────────────────────────────────────────────
+	   The platform's own hiding primitive, kept ahead of the kit's `display`.
+	   The UA's `[hidden] { display: none }` loses to ANY author `display` —
+	   origin is decided before specificity — so on its own a `.vui-badge`
+	   (inline-flex), a `.vui-row` (flex) or a bare <button> in one (the default
+	   above) would stay on screen with `hidden` set: `el.hidden = true`, or
+	   vanilla's `data-bind="hidden:…"`, would silently do nothing.
+
+	   Two forms, both off the container hook: the element carrying a vui- class
+	   itself, at (0,3,0) — `:is()`, not `:where()`, so it outranks every
+	   `display` in this file wherever it sits, the two-class `.vui-field >
+	   .vui-help` included — and any descendant of one, at (0,2,0), for the bare
+	   controls. Layered like the rest, not `!important`: a consumer's unlayered
+	   rule may still show a hidden element (a fade-out). Never over
+	   `hidden="until-found"`, which the UA hides with content-visibility so
+	   find-in-page can reveal it (a tabs panel) — the exception every component's
+	   own rule makes too. Those component rules stay, and must: a `display` in
+	   vui.components outranks anything in vui.base whatever its specificity,
+	   because layer order is decided first, so a rule here can never hide a
+	   component's own part. This one is for base's markup wherever it sits — a
+	   badge in a card, a toolbar row, an inline menu, the bare controls inside
+	   them. */
+	:is([class^="vui-"], [class*=" vui-"])[hidden]:not([hidden="until-found"]),
+	:where([class^="vui-"], [class*=" vui-"]) [hidden]:not([hidden="until-found"]) {
+		display: none;
 	}
 }
