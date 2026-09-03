@@ -322,6 +322,60 @@ left is a box, an `isOpen` observable and the events out. Three decisions inside
 There is deliberately no `disabled` prop: the platform has no disabled `<details>`, and faking
 one is JS plus CSS for a state a prototype can express by not rendering the section.
 
+### D12 — Tabs: an array, because a tab is a pair
+
+The fourth primitive is the first one the platform has **no element for**, and the first
+that takes a list. Both are worth saying out loud.
+
+- **It takes `tabs: Tab[]`, and D10's "items are markup" still stands.** A menu item is one
+  element with a role, so the popover can query markup the consumer writes anyway. A tab is
+  a **pair** — a label in the strip and a panel below it — and the association between them
+  (`id`, `aria-controls`, `aria-labelledby`, which one is showing) is exactly the glue the
+  component exists to write. There is no markup a consumer already has that carries it, so
+  asking for it would mean asking them to hand-author the aria and then having the component
+  check it. The array is read **once**, at creation; nothing is diffed, nothing is keyed, and
+  the panels are static — which is the promise the roadmap made and the reason D8's
+  "defer what needs a reconciler" is not in play. (Stuic's `TabbedMenu` is items-driven too,
+  but it is only the strip: it reports a `value` and leaves the panels to the page. Owning
+  both is what buys the pairing, and it is the whole difference between the two components.)
+
+- **The tab is the fifth base control (D9), keyed on `role="tab"`.** Same move as the menu
+  item, one primitive later: `components/tabs.html` gives its tabs **no class at all**, and
+  `components/base.css` paints them — with `.vui-tab` / `.vui-tablist` for a hand-written
+  strip outside a component (a nav of `<a>`s that reads as tabs needs no factory). The strip
+  comes with it, in the same block, because the two are one idea: the strip draws the rail
+  and a selected tab's indicator is pulled down **over** that rail, and splitting them means
+  lining the two up again in every future tab strip. The strip **scrolls** rather than wraps
+  so the rail stays one unbroken line — which is also why a tab's focus ring is drawn inside,
+  as the menu item's and the summary's are. The lint counts `[role="tab"]` and `.vui-tab` as
+  controls, so no component can take them back.
+
+- **A panel that is not showing is still findable.** An inactive panel is
+  `hidden="until-found"`, not `hidden`: Ctrl+F for a word in a tab you are not looking at and
+  the browser reveals the panel, fires `beforematch`, and the component selects that tab.
+  That is the disclosure's find-in-page story (D11) bought a second time, for ~5 lines and
+  one listener. Three consequences, all deliberate: a panel carries **no padding of its own**
+  (the container holds it) because a `hidden-matchable` box is _rendered_, just skipped, and
+  padding would leave a band of empty space per inactive tab; the panel of a **disabled** tab
+  is plainly `hidden`, since a hit there would reveal a panel no tab can select; and the
+  three older components' `:scope [hidden] { display: none }` — written for a hidden ✕, but
+  reaching every descendant — became `:not([hidden="until-found"])`, exactly the exception the
+  UA's own rule makes. A browser without the feature reads the value as a plain `hidden` and
+  the panel is simply hidden, which is what it would have been anyway (contrast the popover,
+  D10, where the missing feature would have left a _broken_ box).
+
+- **Selection follows focus, unless it shouldn't.** `activation: "auto"` (the default) selects
+  as the arrow keys move, which is what the ARIA pattern recommends for panels this cheap;
+  `"manual"` moves focus only and lets Enter or Space — the `<button>`'s own, no glue —
+  select. The roving `tabindex` follows the **selection**, not the focus: one stop leads into
+  the strip and it is the selected tab, and an arrowed-to tab is focusable at `-1` regardless.
+
+- **`disabled` is read off the element, every time.** `tabs.tab("x").disabled = true` takes a
+  tab out of the keyboard order and out of `select()` from that moment, with nothing to
+  re-render and no second copy of the state — the same live read the popover's menu does over
+  its items. What it does not do is move the selection: the component changes nothing behind
+  the consumer's back.
+
 ---
 
 ## 3. Anatomy of a component (the contract)
@@ -356,8 +410,9 @@ one is JS plus CSS for a state a prototype can express by not rendering the sect
 </script>
 ```
 
-Rules the test enforces: template ids start with `tpl-vui-`; the root has both the class and
-`data-scope`; every `<style>` is `@scope`d to the root class **and** wrapped in
+Rules the test enforces: template ids start with `tpl-vui-` (a component may ship **more than
+one** — `tabs.html` clones a tab and a panel per entry — as long as `tpl-vui-<name>` is the
+root's); the root has both the class and `data-scope`; every `<style>` is `@scope`d to the root class **and** wrapped in
 `@layer vui.components`; every `--vui-*` it reads or sets is in `components/base.css`'s
 vocabulary (and no raw `--vui-color-*` token is read); no color literal outside a `var()`
 fallback; no paint property on a selector targeting a control (D9); exactly one module script;
@@ -404,7 +459,7 @@ In this order — each one mostly platform:
 | 1 | dialog          | `<dialog>`                     | ✅ shipped                                                                 |
 | 2 | menu / popover  | Popover API (`popover="auto"`) | ✅ shipped — one `popover` component, `role: "menu"` for the menu (D10)    |
 | 3 | disclosure      | `<details>` / `<summary>`      | ✅ shipped — `name` is the accordion, `::details-content` the motion (D11) |
-| 4 | tabs            | roving `tabindex`, aria-tabs   | static panels; no list diffing                                             |
+| 4 | tabs            | roving `tabindex`, aria-tabs   | ✅ shipped — a tab is a base control; `hidden=until-found` panels (D12)    |
 | 5 | toast           | region + timers                | a leaf; `mount` into a fixed host                                          |
 | — | select/combobox | listbox + keyed options        | **deferred** — needs keyed lists (D8)                                      |
 

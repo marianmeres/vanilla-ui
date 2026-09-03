@@ -88,14 +88,22 @@ function declarationBlocks(css: string): { selector: string; body: string }[] {
 		.map((m) => ({ selector: m[1].trim(), body: m[2] }));
 }
 
-/** Does this selector target a control the base layer owns? */
+/**
+ * Does this selector target a control the base layer owns? The class tests are
+ * anchored so a container never counts as its own control: `.vui-tabs`,
+ * `.vui-tablist` and `.vui-tabs__panels` are a component's to lay out and to
+ * paint, while `.vui-tab` and `[role="tab"]` are base's alone.
+ */
 const paintsAControl = (selector: string) =>
 	/(^|[\s,>+~(])(button|select|textarea|input|summary)\b/.test(selector) ||
 	selector.includes(".vui-btn") ||
 	selector.includes(".vui-input") ||
 	selector.includes(".vui-menuitem") ||
 	selector.includes(".vui-summary") ||
-	/\[role[\^$*]?=["']?menuitem/.test(selector);
+	/\.vui-tab(?![\w-])/.test(selector) ||
+	/\.vui-tablist(?![\w-])/.test(selector) ||
+	/\[role[\^$*]?=["']?menuitem/.test(selector) ||
+	/\[role[\^$*]?=["']?tab(list)?["']?[\s\]]/.test(selector);
 
 /** Properties that decide how a control LOOKS — base's job, never a component's. */
 const isPaint = (prop: string) =>

@@ -13,8 +13,8 @@ any [`design-tokens`](https://jsr.io/@marianmeres/design-tokens) theme, light or
 Every component leans on the platform first (native `<dialog>`, the Popover API, `<details>`)
 and adds only chrome, keyboard/aria glue, and a small typed API. Underneath them all sits one
 small **base layer** (`components/base.css`) holding the token vocabulary and the control
-primitives — buttons, inputs, menu items, summaries, the focus ring — so nothing in the kit can
-drift apart. The
+primitives — buttons, inputs, menu items, summaries, tabs, the focus ring — so nothing in the
+kit can drift apart. The
 rationale is in [`docs/DESIGN.md`](./docs/DESIGN.md).
 
 ## Components
@@ -24,8 +24,9 @@ rationale is in [`docs/DESIGN.md`](./docs/DESIGN.md).
 | dialog         | [`components/dialog.html`](./components/dialog.html)         | native `<dialog>`                    | ✅     |
 | popover / menu | [`components/popover.html`](./components/popover.html)       | Popover API + CSS Anchor Positioning | ✅     |
 | disclosure     | [`components/disclosure.html`](./components/disclosure.html) | native `<details>` / `<summary>`     | ✅     |
+| tabs           | [`components/tabs.html`](./components/tabs.html)             | ARIA tabs + `hidden="until-found"`   | ✅     |
 
-Planned, in this order: tabs, toast. See
+Planned next: toast. See
 [`docs/DESIGN.md` → Roadmap](./docs/DESIGN.md#5-roadmap).
 
 ## Install
@@ -150,6 +151,39 @@ for (const [question, answer] of faq) {
 The `<summary>` is a base-layer control like a button, so a plain `<details>` you write into a
 dialog body or a panel looks the same without a single class.
 
+### Tabs
+
+`createTabs` takes the tabs as an array — a tab is a **pair** (a label and a panel), and tying
+the two together with ids and aria is the whole reason the component exists. It writes the
+`role="tablist"` strip, the roving `tabindex`, `aria-controls` / `aria-labelledby`, and the
+keyboard: ← → (↑ ↓ when vertical), Home, End, selecting as it moves unless you ask for
+`activation: "manual"`.
+
+```ts
+const { createTabs } = await loadAll();
+
+const tabs = createTabs({
+	ariaLabel: "Settings",
+	selected: "profile", // default: the first enabled tab
+	tabs: [
+		{ value: "profile", label: "Profile", panel: fromTemplate("tpl-profile") },
+		{ value: "billing", label: "Billing", panel: "Nothing due." }, // text | element | view
+		{ value: "api", label: "API keys", panel: createKeyList(), disabled: true },
+	],
+	onSelect: (value) => console.log("showing:", value), // never for the initial one
+});
+page.append(tabs.el);
+
+tabs.select("billing");
+tabs.tab("api").disabled = false; // read live — nothing to re-render
+```
+
+The panels you are not looking at are `hidden="until-found"`, so **find-in-page still finds
+them**: the browser reveals the panel, and the component selects its tab. And a tab is a
+`<button role="tab">` with no class on it — the base layer paints it by that role, so
+`.vui-tab` / `.vui-tablist` give a hand-written strip (a nav of `<a>`s, say) the same look with
+no factory at all.
+
 ### Everything from vanilla is here too
 
 The index re-exports the whole base library, so one import gives you `observable`,
@@ -204,7 +238,8 @@ what makes a `<form method="dialog">` dropped into a dialog body come out right.
 the third control, keyed on its role: `<button role="menuitem">` in a `.vui-menu` needs no class
 either (`.vui-menuitem` is the same look outside a component; `--destructive` tints it). A
 `<summary>` is the fourth, keyed on the element — a row with a caret that turns with its
-`<details>` (`.vui-summary` outside a component). Building
+`<details>` (`.vui-summary` outside a component). A tab is the fifth, keyed on `role="tab"`,
+with `.vui-tablist` for the strip it sits in. Building
 a footer in JS? `button("Delete", { variant: "destructive", onClick })` returns an element with
 those classes on it. A container adapts every control inside it — its own and yours — by
 re-declaring `--vui-control-bg` &c. on itself; no descendant selectors anywhere. A variant is

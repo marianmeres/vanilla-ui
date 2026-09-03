@@ -106,8 +106,10 @@
 			background: var(--vui-scrim, rgb(0 0 0 / 0.45));
 			backdrop-filter: blur(2px);
 		}
-		/* wins over the base layer's `display: inline-flex` on a hidden ✕ */
-		:scope [hidden] {
+		/* wins over the base layer's `display: inline-flex` on a hidden ✕ —
+		   but never over a `hidden="until-found"` box (a tabs panel in a slot),
+		   which the UA's own rule is careful about in exactly the same way */
+		:scope [hidden]:not([hidden="until-found"]) {
 			display: none;
 		}
 

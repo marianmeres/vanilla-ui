@@ -119,8 +119,10 @@
 			border-top: var(--vui-border-width, 1px) solid var(--_border);
 			line-height: 1.5;
 		}
-		/* wins over the base layer's `display` on a hidden control */
-		:scope [hidden] {
+		/* wins over the base layer's `display` on a hidden control — but never
+		   over a `hidden="until-found"` box (a tabs panel in a slot), which the
+		   UA's own rule is careful about in exactly the same way */
+		:scope [hidden]:not([hidden="until-found"]) {
 			display: none;
 		}
 	}

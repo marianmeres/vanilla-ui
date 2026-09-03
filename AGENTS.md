@@ -43,7 +43,9 @@ README.md · API.md        — human docs
    that imports vanilla by **bare specifier** only and exports `create<Name>(props)`. The lint
    also fails raw `--vui-color-*` reads, unknown `--vui-*` names, color literals outside a
    `var()` fallback, and any paint declared on a control selector — buttons, inputs, menu
-   items, summaries (see 4 and 9).
+   items, summaries, tabs (see 4 and 9). A component may ship **more than one** template
+   (`tabs.html` clones a tab and a panel per entry) as long as every id is `tpl-vui-`-prefixed
+   and `tpl-vui-<name>` is the root's.
 3. **`data-scope` on every root.** It is vanilla's component boundary; without it nested
    components collide on `data-ref` names and `data-on` actions.
 4. **Theming goes through the base vocabulary.** `components/base.css` reads every
@@ -64,7 +66,11 @@ README.md · API.md        — human docs
    stacking, the anchor as the native invoker, CSS Anchor Positioning for placement — and JS
    only where the browser has none of it. The disclosure is the extreme case (§D11): the
    accordion is `<details name>`, the motion is `::details-content`, and there is no aria or
-   keyboard glue at all. If a primitive would need keyed list diffing, defer
+   keyboard glue at all. Tabs is the case with **no** element behind it (§D12) — so it is the
+   wiring, and still leans on two platform pieces: `<button role="tab">` for Enter/Space, and
+   `hidden="until-found"` panels, which keep an inactive panel findable (`beforematch` selects
+   its tab). That last one is why every component's `[hidden]` rule must exclude
+   `[hidden="until-found"]`. If a primitive would need keyed list diffing, defer
    it (see DESIGN §6).
 8. **Types live in `src/mod.ts`.** Components are plain JS; declare `<Name>Props`,
    `<Name>View`, `Create<Name>`, add `load<Name>()`, and extend `VanillaUi` + `loadAll()`.
@@ -72,8 +78,10 @@ README.md · API.md        — human docs
    not components (DESIGN §D9): `.vui-btn` + the five design-tokens roles
    (`--primary|accent|destructive|warning|success`) + `--ghost|--icon`, `.vui-input`,
    `.vui-field`, `.vui-row`, the menu item — keyed on `role="menuitem"` inside a component,
-   `.vui-menuitem` (+ `--destructive`) outside, laid out by `.vui-menu` — and the `<summary>`
-   row (keyed on the element; `.vui-summary` outside, caret and all) in
+   `.vui-menuitem` (+ `--destructive`) outside, laid out by `.vui-menu` — the `<summary>`
+   row (keyed on the element; `.vui-summary` outside, caret and all), and the tab (keyed on
+   `role="tab"`; `.vui-tab` outside, in a `.vui-tablist` strip that ships in the same block
+   because it draws the rail the indicator sits on) in
    `components/base.css`, plus a zero-specificity default so a **bare `<button>` inside any
    vui component** (a consumer's slot content) is styled too. A component may position a
    control; it may not paint one — to adapt controls to
@@ -96,7 +104,8 @@ README.md · API.md        — human docs
 ## Adding a Component
 
 1. Create `components/<name>.html` following the anatomy in Convention 2 (copy `dialog.html`,
-   or `popover.html` for anything anchored to a trigger): `<style>` wrapped in
+   `popover.html` for anything anchored to a trigger, or `tabs.html` for anything built from a
+   list of props): `<style>` wrapped in
    `@layer vui.components { @scope (.vui-<name>) { … } }`, colors from the base vocabulary, no
    control painting (Convention 9).
 2. Add types + `load<Name>()` to `src/mod.ts` (`await loadStyles(base)` first); extend
@@ -128,12 +137,21 @@ README.md · API.md        — human docs
       string, which would break `COMPONENTS_BASE` in the browser.
 - [ ] A dependency published < 24 h ago trips Deno's minimum-dependency-age policy; pass
       `--minimum-dependency-age 0` for that run rather than lowering it in `deno.json`.
+- [ ] **Keep `deno fmt` out of a feature commit.** The `.html` files are hand-formatted and
+      not yet fmt-clean (`deno fmt --check` lists 7 of them). A blanket run is _safe_ —
+      measured, by fingerprinting the rendered gallery before and after (every text node and
+      every bounding box): identical, and all four browser-test pages still pass —
+      but it rewrites ~2600 lines, mostly de-indenting each `<script>` / `<style>` body to
+      column 0, and that buries the real diff. (The one place it reads worse: the browser
+      tests, where a one-line `check(name, cond, detail)` becomes five.) So format only what
+      you touched (`deno fmt src/mod.ts API.md`) — adopting it for HTML is a commit of its
+      own.
 
 ## Documentation Index
 
 - [docs/DESIGN.md](./docs/DESIGN.md) — why shipped templates, tokens-with-fallbacks, `data-scope`,
-  events, the base layer (§D9), the popover's platform-first split (§D10); component anatomy;
-  roadmap; non-goals.
+  events, the base layer (§D9), the popover's platform-first split (§D10), why tabs takes an
+  array where the menu takes markup (§D12); component anatomy; roadmap; non-goals.
 - [components/base.css](./components/base.css) — the vocabulary and the control primitives; its
   header comment is the reference for both.
 - [README.md](./README.md) — overview, usage, theming, gallery.

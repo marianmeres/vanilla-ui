@@ -169,8 +169,10 @@
 		:scope[role="menu"] {
 			padding: 0;
 		}
-		/* wins over the base layer's `display` on a hidden control or item */
-		:scope [hidden] {
+		/* wins over the base layer's `display` on a hidden control or item —
+		   but never over a `hidden="until-found"` box (a tabs panel in a slot),
+		   which the UA's own rule is careful about in exactly the same way */
+		:scope [hidden]:not([hidden="until-found"]) {
 			display: none;
 		}
 	}

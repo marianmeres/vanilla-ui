@@ -27,4 +27,12 @@ their role alone (.vui-menu, .vui-menuitem, --destructive); and disclosure on th
 already has the toggle, the keyboard, aria-expanded and find-in-page, with `name` giving a
 natively exclusive accordion (no group component, no registry) and ::details-content the height
 animation. The <summary> row is a base control too, keyed on the element (.vui-summary outside a
-component), so a plain <details> in any slot comes out the same.
+component), so a plain <details> in any slot comes out the same. Newest is tabs, the first
+primitive with no platform element behind it: it takes the tabs as an array (a tab is a PAIR —
+a label and a panel — and tying them together with ids and aria is the whole job; the array is
+read once, nothing is diffed), writes the role="tablist" strip, the roving tabindex and the
+arrow/Home/End keys (selection follows focus unless activation:"manual"), and turns on its side
+with orientation:"vertical". Its tabs are <button role="tab"> with NO class — base.css paints
+them by that role (.vui-tab / .vui-tablist outside a component) — and an inactive panel is
+hidden="until-found", so find-in-page reveals it, fires beforematch, and the component selects
+that tab.

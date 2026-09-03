@@ -16,9 +16,9 @@
  *      this module's own URL, so the kit works from wherever it is served (a sibling
  *      folder, a vendored copy, a CDN) with no configuration.
  *   3. **Loads them with types** — {@link loadAll} / {@link loadDialog} /
- *      {@link loadPopover} / {@link loadDisclosure} return the factories typed by the
- *      interfaces declared here (the `.html` files are plain JS; the types live in
- *      this file).
+ *      {@link loadPopover} / {@link loadDisclosure} / {@link loadTabs} return the
+ *      factories typed by the interfaces declared here (the `.html` files are plain
+ *      JS; the types live in this file).
  *   4. **Installs the base style layer** ({@link loadStyles}, called by every loader)
  *      — `components/base.css`: the design-token vocabulary every component reads
  *      and the kit's control primitives (`.vui-btn`, `.vui-input`). Buttons are
@@ -398,6 +398,70 @@ export async function loadDisclosure(
 }
 
 /* ============================================================================
+ * tabs — components/tabs.html
+ * ========================================================================== */
+
+/** One tab of {@link TabsProps.tabs}: a label, its panel, and the identity tying them. */
+export interface Tab {
+	/**
+	 * Identity — what {@link TabsView.selected} reports and what
+	 * {@link TabsView.select} takes. Defaults to the tab's **index** as a string.
+	 * Must be unique within one `tabs` array (a duplicate is dropped).
+	 */
+	value?: string;
+	/** The tab itself — see {@link Slot}. Defaults to `value`. */
+	label?: Slot;
+	/** Its panel — see {@link Slot}. */
+	panel?: Slot;
+	/** Not selectable, and skipped by the arrow keys. Flip it later via {@link TabsView.tab}. */
+	disabled?: boolean;
+}
+
+/** Props of {@link CreateTabs}. All optional. */
+export interface TabsProps {
+	/** The tabs, in order. Built once — the panels are static (there is no list diffing). */
+	tabs?: Tab[];
+	/** Which `value` starts selected. Default: the first enabled tab. */
+	selected?: string;
+	/** Which way the strip runs. Default `"horizontal"`. */
+	orientation?: "horizontal" | "vertical";
+	/**
+	 * `"auto"` — the arrow keys select as they move (the ARIA pattern's default,
+	 * and right for panels as cheap as these). `"manual"` — the arrows move focus
+	 * only; Enter or Space selects. Default `"auto"`.
+	 */
+	activation?: "auto" | "manual";
+	/** Accessible name for the `role="tablist"` strip. */
+	ariaLabel?: string;
+	/** Called on every change of selection — never for the initial one. */
+	onSelect?: (value: string, tab: HTMLElement) => void;
+}
+
+/** The view returned by {@link CreateTabs}. */
+export interface TabsView extends ViewInstance {
+	/** The root (`data-scope="tabs"`), holding the strip and the panels. */
+	el: HTMLElement;
+	/** The selected tab's `value` (`""` if there is none). */
+	selected: ReadonlyObservable<string>;
+	/** Select a tab. No-op for an unknown, disabled, or already-selected `value`. */
+	select(value: string): void;
+	/** The `<button role="tab">` for a `value` — set `.disabled`, append a badge… */
+	tab(value: string): HTMLElement | undefined;
+	/** The `[role="tabpanel"]` for a `value` — fill it late, read it back. */
+	panel(value: string): HTMLElement | undefined;
+}
+
+/** The tabs factory exported by `components/tabs.html`. */
+export type CreateTabs = (props?: TabsProps) => TabsView;
+
+/** Load `components/tabs.html` and return its typed factory. Idempotent per URL. */
+export async function loadTabs(base: string = COMPONENTS_BASE): Promise<CreateTabs> {
+	await loadStyles(base);
+	const mod = await loadComponent(componentUrl("tabs", base));
+	return mod.createTabs as CreateTabs;
+}
+
+/* ============================================================================
  * All of it
  * ========================================================================== */
 
@@ -406,6 +470,7 @@ export interface VanillaUi {
 	createDialog: CreateDialog;
 	createDisclosure: CreateDisclosure;
 	createPopover: CreatePopover;
+	createTabs: CreateTabs;
 }
 
 /**
@@ -418,10 +483,12 @@ export async function loadAll(base: string = COMPONENTS_BASE): Promise<VanillaUi
 	// first, and awaited: it declares the cascade layer ORDER the components' own
 	// `@layer vui.components` blocks slot into
 	await loadStyles(base);
-	const [createDialog, createDisclosure, createPopover] = await Promise.all([
-		loadDialog(base),
-		loadDisclosure(base),
-		loadPopover(base),
-	]);
-	return { createDialog, createDisclosure, createPopover };
+	const [createDialog, createDisclosure, createPopover, createTabs] = await Promise
+		.all([
+			loadDialog(base),
+			loadDisclosure(base),
+			loadPopover(base),
+			loadTabs(base),
+		]);
+	return { createDialog, createDisclosure, createPopover, createTabs };
 }

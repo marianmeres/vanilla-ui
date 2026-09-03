@@ -545,6 +545,70 @@
 				</div>
 				<pre class="log" data-ref="log"></pre>
 			</section>
+
+			<!-- ================================================================== tabs -->
+			<section class="component" id="tabs">
+				<h2>tabs</h2>
+				<p>
+					The first primitive the platform has no element for, so this
+					one is the <em>wiring</em>: it pairs each tab with its panel
+					(ids, <code>aria-controls</code>,
+					<code>aria-labelledby</code>), moves the roving
+					<code>tabindex</code>, and switches the panels. Two platform
+					pieces still carry it. The tab is a
+					<code>&lt;button role="tab"&gt;</code> — Enter and Space are
+					its own, and the base layer paints it by that role, so the
+					tabs here have <strong>no class at all</strong>. And an
+					inactive panel is <code>hidden="until-found"</code>: press
+					<kbd>⌘F</kbd> / <kbd>Ctrl+F</kbd> and search for
+					<strong>armadillo</strong> — it is only in the third tab, and
+					the browser will open it for you.
+				</p>
+				<div class="stack" data-ref="basics"></div>
+
+				<p style="margin: 1.5rem 0 0.5rem; font-size: 0.925rem">
+					<code>activation: "manual"</code> — the arrows move focus,
+					Enter or Space selects. For panels expensive enough that
+					arrowing past them should not load them. (Focus a tab and
+					try ← →.)
+				</p>
+				<div data-ref="manual"></div>
+
+				<p style="margin: 1.5rem 0 0.5rem; font-size: 0.925rem">
+					<code>orientation: "vertical"</code> — the same component
+					turned on its side: ↑ ↓ instead of ← →, the rail down the
+					inline edge, and the indicator with it.
+				</p>
+				<div data-ref="vertical"></div>
+
+				<p style="margin: 1.5rem 0 0.5rem; font-size: 0.925rem">
+					More tabs than fit: the strip scrolls rather than wraps, so
+					the rail stays one line — which is also why a tab draws its
+					focus ring inside. (Tab into it and hold →.)
+				</p>
+				<div data-ref="many"></div>
+
+				<div class="vui-row" style="margin: 1rem 0">
+					<button type="button" class="vui-btn" data-on="click:cycle">
+						select the next one
+					</button>
+					<button
+						type="button"
+						class="vui-btn"
+						data-on="click:toggleDisabled"
+					>
+						disable / enable “Markup”
+					</button>
+					<button
+						type="button"
+						class="vui-btn"
+						data-on="click:inDialog"
+					>
+						inside a dialog
+					</button>
+				</div>
+				<pre class="log" data-ref="log"></pre>
+			</section>
 		</div>
 
 		<!-- ------------------------------------------------ gallery-only templates -->
@@ -684,6 +748,48 @@
 						focus ring, same hover off this box's surface.
 					</p>
 				</details>
+			</div>
+		</template>
+
+		<!-- a tab panel: markup, bare controls. The panel itself carries no
+		     padding on purpose — an inactive one is still RENDERED (that is what
+		     makes it findable), so padding of its own would leave a band of empty
+		     space behind every tab you are not looking at. -->
+		<template id="tpl-gallery-tabs-panel">
+			<div>
+				<p style="margin: 0 0 0.75rem">
+					A panel takes any <code>Slot</code> — text, an element, or a
+					view. Not one control class below: the field and the button
+					are painted by the base layer because they sit inside a vui
+					component.
+				</p>
+				<div class="vui-row" style="align-items: flex-end">
+					<div class="vui-field" style="flex: 1 1 12rem; margin: 0">
+						<label for="g-tab-note">Note</label>
+						<input
+							id="g-tab-note"
+							name="note"
+							type="text"
+							placeholder="…"
+						/>
+					</div>
+					<button type="button">Save</button>
+				</div>
+			</div>
+		</template>
+
+		<!-- the panel find-in-page can reach: the word below is nowhere else on
+		     the page, and the tab holding it starts closed. -->
+		<template id="tpl-gallery-tabs-findable">
+			<div>
+				<p style="margin: 0">
+					An <strong>armadillo</strong> lives here, in a panel that is
+					not showing. <code>hidden="until-found"</code> keeps it
+					findable anyway: the browser reveals the panel, fires
+					<code>beforematch</code>, and the component selects this tab
+					— no scroll listener, no observer, no JS of ours until that
+					one event.
+				</p>
 			</div>
 		</template>
 
@@ -1060,6 +1166,166 @@
 									),
 									onOpen: () => log("in dialog → vui:open"),
 									onClose: () => log("in dialog → vui:close"),
+								}), // a VIEW: destroyed with the dialog
+								onClose: () => dlg.destroy(),
+							});
+							document.body.append(dlg.el);
+							dlg.open();
+						},
+					}),
+				);
+			});
+
+			/* ---- tabs section ---------------------------------------------------- */
+			enhance("#tabs", (el, track) => {
+				const r = refs(el);
+				const log = (line) => {
+					r.log.textContent += (r.log.textContent ? "\n" : "") + line;
+					r.log.scrollTop = r.log.scrollHeight;
+				};
+
+				// Like the disclosures, and unlike the dialogs: created once and
+				// kept. The panels are static — that is the whole bargain (no list
+				// diffing, so no reconciler in vanilla).
+				const add = (slot, label, props) => {
+					const t = ui.createTabs({
+						ariaLabel: label,
+						...props,
+						onSelect: (value) =>
+							log(`${label} → vui:select "${value}"`),
+					});
+					slot.append(t.el);
+					track(() => t.destroy());
+					return t;
+				};
+
+				const values = ["overview", "markup", "findable", "view", "soon"];
+				const basics = add(r.basics, "basics", {
+					tabs: [
+						{
+							value: "overview",
+							label: "Overview",
+							panel:
+								"The strip is a role, the panels are static, and the " +
+								"selection is one observable. Arrow through the tabs: " +
+								"selection follows focus, which is the ARIA pattern's " +
+								"default for panels this cheap.",
+						},
+						{
+							value: "markup",
+							label: "Markup",
+							panel: fromTemplate("tpl-gallery-tabs-panel"),
+						},
+						{
+							value: "findable",
+							label: "Findable",
+							panel: fromTemplate("tpl-gallery-tabs-findable"),
+						},
+						// a VIEW slot: mounted, and destroyed with the tabs
+						{
+							value: "view",
+							label: "A child view",
+							panel: createCounter(),
+						},
+						{
+							value: "soon",
+							label: "Disabled",
+							disabled: true,
+							panel:
+								"Not reachable — and its panel is plainly hidden, not " +
+								"findable: a find-in-page hit in here would reveal a " +
+								"panel no tab can select.",
+						},
+					],
+				});
+
+				add(r.manual, "manual", {
+					activation: "manual",
+					tabs: [
+						{ value: "one", label: "First", panel: "Arrowed to, then chosen." },
+						{
+							value: "two",
+							label: "Second",
+							panel: "Nothing loaded on the way here.",
+						},
+						{
+							value: "three",
+							label: "Third",
+							panel: "Enter and Space are the button's own.",
+						},
+					],
+				});
+
+				add(r.vertical, "vertical", {
+					orientation: "vertical",
+					tabs: [
+						{
+							value: "account",
+							label: "Account",
+							panel: "The rail runs the height of the row.",
+						},
+						{
+							value: "billing",
+							label: "Billing",
+							panel: "↑ ↓ move; ← → are left to the page.",
+						},
+						{ value: "api", label: "API keys", panel: "Same component, one prop." },
+					],
+				});
+
+				add(r.many, "many", {
+					tabs: Array.from({ length: 14 }, (_, i) => ({
+						value: `s${i}`,
+						label: `section ${i + 1}`,
+						panel: `Panel ${i + 1}.`,
+					})),
+				});
+
+				track(
+					delegate(el, {
+						cycle: () => {
+							const from = basics.selected.get();
+							const i = values.indexOf(from);
+							for (let n = 1; n <= values.length; n++) {
+								basics.select(values[(i + n) % values.length]);
+								if (basics.selected.get() !== from) return;
+							}
+						},
+
+						toggleDisabled: () => {
+							const tab = basics.tab("markup");
+							tab.disabled = !tab.disabled;
+							// `disabled` is read off the element every time, so this
+							// takes effect at once with nothing to re-render. What it
+							// does NOT do is move the selection: the component changes
+							// nothing behind your back.
+							if (tab.disabled && basics.selected.get() === "markup") {
+								basics.select("overview");
+							}
+							log(`markup → ${tab.disabled ? "disabled" : "enabled"}`);
+						},
+
+						inDialog: () => {
+							const dlg = ui.createDialog({
+								title: "Settings",
+								body: ui.createTabs({
+									ariaLabel: "in a dialog",
+									tabs: [
+										{
+											value: "general",
+											label: "General",
+											panel: fromTemplate("tpl-gallery-tabs-panel"),
+										},
+										{
+											value: "danger",
+											label: "Danger zone",
+											panel:
+												"The strip takes the dialog panel's control " +
+												"context — hover a tab.",
+										},
+									],
+									onSelect: (value) =>
+										log(`in dialog → vui:select "${value}"`),
 								}), // a VIEW: destroyed with the dialog
 								onClose: () => dlg.destroy(),
 							});

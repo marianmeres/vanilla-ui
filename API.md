@@ -16,7 +16,7 @@ Fetch and adopt every component (in parallel) and return the typed factories. Ca
 - `base` (`string`, optional) — URL of the `components/` directory. Default:
   [`COMPONENTS_BASE`](#components_base).
 
-**Returns:** `Promise<VanillaUi>` — `{ createDialog, createDisclosure, createPopover }`.
+**Returns:** `Promise<VanillaUi>` — `{ createDialog, createDisclosure, createPopover, createTabs }`.
 
 **Example:**
 
@@ -59,6 +59,18 @@ Load `components/popover.html` alone and return its typed factory.
 - `base` (`string`, optional) — as in `loadAll`.
 
 **Returns:** `Promise<CreatePopover>`.
+
+---
+
+### `loadTabs(base?)`
+
+Load `components/tabs.html` alone and return its typed factory.
+
+**Parameters:**
+
+- `base` (`string`, optional) — as in `loadAll`.
+
+**Returns:** `Promise<CreateTabs>`.
 
 ---
 
@@ -318,6 +330,8 @@ consistent without a rule per variant. Your own role works the same way, no kit 
 | `.vui-input` / `.vui-select`                                                   | text inputs, selects, textareas                                  |
 | `.vui-menuitem`                                                                | a menu item (what `role="menuitem"` gets inside a component)     |
 | `.vui-summary`                                                                 | a disclosure header (what a `<summary>` gets inside a component) |
+| `.vui-tab`                                                                     | a tab (what `role="tab"` gets inside a component)                |
+| `.vui-tablist`                                                                 | the strip a tab sits in — its rail, and its scroll               |
 | `.vui-menuitem--destructive`                                                   | colored text and a tinted hover — never a filled row             |
 | `.vui-field`                                                                   | a stacked `<label>` + full-width control                         |
 | `.vui-row`                                                                     | a wrapping flex row at `--vui-gap` (button rows, toolbars)       |
@@ -339,11 +353,22 @@ that turns with its `<details>`'s `[open]`, and the focus ring drawn inside (a d
 clips itself to its radius). `.vui-summary` is the same look outside a container. So a plain
 `<details>` in a dialog body or a disclosure panel comes out like the kit's own.
 
+**Tabs** are the fifth control, keyed on the role again: inside any vui container a
+`[role="tab"]` is painted as a tab — muted at rest, hover and foreground from the
+[control context](#control-context), and a 2px indicator that is transparent until
+`aria-selected="true"` and is pulled down **over** the strip's rail so the two read as one
+line. `:is()` at (0,1,0) and written after `.vui-btn`, so `button("Overview", { role: "tab" })`
+comes out a tab. The strip is `.vui-tablist` / `[role="tablist"]`, and ships in the same block
+because it draws the rail the indicator sits on; it **scrolls** rather than wraps (hence the
+focus ring drawn inside), and `aria-orientation="vertical"` turns the whole thing on its side —
+rail and indicator move to the inline edge. `components/tabs.html` gives its tabs no class at
+all; `.vui-tab` / `.vui-tablist` are for a strip you write yourself, a nav of `<a>`s included.
+
 ### Bare markup inside a component
 
 Any element carrying a `vui-` class is a **container hook**: bare `<button>`, `<input>`,
-`<select>`, `<textarea>`, `<summary>` and `[role="menuitem"]` descendants get the control look
-with no classes at all. So a `<form method="dialog">` dropped into a dialog body is styled, and takes
+`<select>`, `<textarea>`, `<summary>`, `[role="menuitem"]` and `[role="tab"]` descendants get
+the control look with no classes at all. So a `<form method="dialog">` dropped into a dialog body is styled, and takes
 that dialog's control context, without knowing the kit exists:
 
 ```html
@@ -637,6 +662,93 @@ way `--vui-transition` (0ms under `prefers-reduced-motion`) is the duration. The
 
 ---
 
+### `createTabs(props?)` — `components/tabs.html`
+
+A tab strip and its panels, on the ARIA tabs pattern — the first primitive the platform has no
+element for, so this one **is** the wiring: it pairs each tab with its panel (ids,
+`aria-controls`, `aria-labelledby`), moves the roving `tabindex`, and switches the panels. Two
+platform pieces still carry it: the tab is a `<button role="tab">` (Enter and Space are its own,
+and the [base layer](#classes) paints it by that role — the tabs carry no class), and an
+inactive panel is `hidden="until-found"`, so **find-in-page still finds it**. Rationale:
+[`docs/DESIGN.md` §D12](./docs/DESIGN.md).
+
+**Parameters:** `props` (`TabsProps`) — all optional
+
+| Prop          | Type                                        | Default        | Description                                                                                            |
+| ------------- | ------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------ |
+| `tabs`        | `Tab[]`                                     | `[]`           | The tabs, in order — see below. Built **once**; the panels are static and nothing is diffed            |
+| `selected`    | `string`                                    | first enabled  | Which `value` starts selected. The state it is created in fires nothing                                |
+| `orientation` | `"horizontal" \| "vertical"`                | `"horizontal"` | Sets `aria-orientation`, swaps the arrow-key axis, and moves the rail and indicator to the inline edge |
+| `activation`  | `"auto" \| "manual"`                        | `"auto"`       | `"auto"`: the arrows select as they move. `"manual"`: they move focus only; Enter or Space selects     |
+| `ariaLabel`   | `string`                                    | —              | Accessible name for the `role="tablist"` strip                                                         |
+| `onSelect`    | `(value: string, tab: HTMLElement) => void` | —              | On every change — never for the initial selection                                                      |
+
+Each `Tab`:
+
+| Field      | Type      | Default   | Description                                                                               |
+| ---------- | --------- | --------- | ----------------------------------------------------------------------------------------- |
+| `value`    | `string`  | its index | Identity: what `selected` reports and `select()` takes. Unique within one array           |
+| `label`    | `Slot`    | `value`   | The tab itself: text, an element, or a view                                               |
+| `panel`    | `Slot`    | —         | Its panel: text, an element, or a view                                                    |
+| `disabled` | `boolean` | `false`   | Not selectable, skipped by the arrow keys — and its panel is plainly hidden, not findable |
+
+**Returns:** `TabsView`
+
+| Member          | Description                                                                       |
+| --------------- | --------------------------------------------------------------------------------- |
+| `el`            | The root (`data-scope="tabs"`), holding the strip and the panels                  |
+| `selected`      | `ReadonlyObservable<string>` — the selected tab's `value` (`""` if there is none) |
+| `select(value)` | Select a tab. No-op for an unknown, disabled, or already-selected `value`         |
+| `tab(value)`    | The `<button role="tab">` — set `.disabled`, append a badge…                      |
+| `panel(value)`  | The `[role="tabpanel"]` — fill it late, read it back                              |
+| `destroy()`     | Runs cleanups, destroys every mounted `label` / `panel` view, removes `el`        |
+
+**Events** (dispatched on `el`, bubbling):
+
+| Event        | `detail`                | When                                              |
+| ------------ | ----------------------- | ------------------------------------------------- |
+| `vui:select` | `{ value, tab, panel }` | on every change — never for the initial selection |
+
+Every route funnels through `select()` and fires exactly once: a click, the arrow keys,
+`select()` itself, and find-in-page revealing a hidden panel.
+
+**Keyboard:** ← → (↑ ↓ when vertical, and reversed under `direction: rtl`) move with wrapping,
+skipping disabled and hidden tabs; `Home` / `End` jump; Enter and Space are the `<button>`'s
+own. The roving `tabindex` follows the **selection**, so `Tab` leads into the strip at the
+selected tab and out of it from there.
+
+**CSS variables read** — none directly: the strip and the tabs are base-layer controls, and the
+component adds no paint of its own (`--vui-transition` is what the panel fades over). Because it
+declares no [control context](#control-context) either, a tab strip in a dialog panel or a
+disclosure body reads against **that** container's surface.
+
+**Example** — a settings pane, with a panel filled later:
+
+```ts
+const tabs = createTabs({
+	ariaLabel: "Settings",
+	tabs: [
+		{ value: "profile", label: "Profile", panel: fromTemplate("tpl-profile") },
+		{ value: "billing", label: "Billing", panel: "Nothing due." },
+		{ value: "api", label: "API keys", disabled: true },
+	],
+	onSelect: (value) => history.replaceState(null, "", `#${value}`),
+});
+page.append(tabs.el);
+
+const keys = await fetchKeys();
+tabs.panel("api").append(renderKeys(keys));
+tabs.tab("api").disabled = false; // read live — nothing to re-render
+```
+
+Disabling the **selected** tab leaves it selected: the component changes nothing behind your
+back, so move off it yourself (`tabs.select(…)`) if that is what you want. And a panel carries
+no padding of its own on purpose — a `hidden="until-found"` box is rendered, just skipped, so
+padding there would leave a band of empty space per inactive tab. Put it on your own content, or
+on `.vui-tabs__panels`.
+
+---
+
 ## Types
 
 ### `Slot`
@@ -785,6 +897,48 @@ interface DisclosureView extends ViewInstance {
 type CreateDisclosure = (props?: DisclosureProps) => DisclosureView;
 ```
 
+### `Tab`
+
+```ts
+interface Tab {
+	value?: string; // default: the index; identity, and what `selected` reports
+	label?: Slot; // default: `value`
+	panel?: Slot;
+	disabled?: boolean;
+}
+```
+
+### `TabsProps`
+
+```ts
+interface TabsProps {
+	tabs?: Tab[];
+	selected?: string; // default: the first enabled tab
+	orientation?: "horizontal" | "vertical"; // default "horizontal"
+	activation?: "auto" | "manual"; // default "auto"
+	ariaLabel?: string;
+	onSelect?: (value: string, tab: HTMLElement) => void;
+}
+```
+
+### `TabsView`
+
+```ts
+interface TabsView extends ViewInstance {
+	el: HTMLElement;
+	selected: ReadonlyObservable<string>;
+	select(value: string): void;
+	tab(value: string): HTMLElement | undefined;
+	panel(value: string): HTMLElement | undefined;
+}
+```
+
+### `CreateTabs`
+
+```ts
+type CreateTabs = (props?: TabsProps) => TabsView;
+```
+
 ### `VanillaUi`
 
 ```ts
@@ -792,6 +946,7 @@ interface VanillaUi {
 	createDialog: CreateDialog;
 	createDisclosure: CreateDisclosure;
 	createPopover: CreatePopover;
+	createTabs: CreateTabs;
 }
 ```
 

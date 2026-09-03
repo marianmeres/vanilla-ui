@@ -1,0 +1,468 @@
+<!doctype html>
+<!--
+	Browser test for components/tabs.html — run by `deno task test:browser`
+	(scripts/browser-test.ts drives headless Chrome and reads #result).
+
+	Contract: one line per check — `ok <name>` / `FAIL <name> (detail)` — and a
+	final `DONE` (or `ERROR …` on an uncaught exception).
+
+	Three halves: the aria wiring and the selection model, the keyboard (both
+	activation modes, both orientations), and the BASE layer's tab control — the
+	look a `role="tab"` gets with no class on it at all.
+-->
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<title>tabs · browser test</title>
+		<link rel="icon" href="data:," />
+		<script type="importmap">
+		{
+			"imports": {
+				"@marianmeres/vanilla": "../../dist/mod.js",
+				"@marianmeres/vanilla-ui": "../../dist/mod.js"
+			}
+		}
+		</script>
+	</head>
+	<body>
+		<!-- a few tokens so "styled by the kit" is distinguishable from "not", and
+		     no transitions: the indicator's color is read straight after a
+		     selection, and getComputedStyle would otherwise return a mid-flight
+		     value (so would the panel's opacity). -->
+		<style>
+		:root {
+			--vui-color-primary: rgb(1, 2, 3);
+			--vui-color-surface-1-hover: rgb(4, 5, 6);
+			--vui-color-muted-foreground: rgb(7, 8, 9);
+			--vui-transition: 0ms;
+		}
+		</style>
+
+		<pre id="result"></pre>
+
+		<!-- a nested child component whose action is ALSO named "activate" -->
+		<template id="tpl-child">
+			<div data-scope="child">
+				<button type="button" data-on="click:activate">x</button>
+			</div>
+		</template>
+
+		<script type="module">
+		import {
+			button,
+			createView,
+			delegate,
+			fromTemplate,
+			loadAll,
+		} from "@marianmeres/vanilla-ui";
+
+		const out = [];
+		const check = (name, cond, detail = "") =>
+			out.push(cond ? `ok ${name}` : `FAIL ${name}${detail ? ` (${detail})` : ""}`);
+		const flush = () => (document.getElementById("result").textContent = out.join("\n"));
+		const tick = () => new Promise((r) => setTimeout(r, 30));
+		const key = (el, k) =>
+			el.dispatchEvent(
+				new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }),
+			);
+
+		try {
+			const { createTabs, createDialog } = await loadAll();
+			check("template adopted", !!document.getElementById("tpl-vui-tabs"));
+			check(
+				"tab + panel templates adopted too",
+				!!document.getElementById("tpl-vui-tabs-tab") &&
+					!!document.getElementById("tpl-vui-tabs-panel"),
+			);
+
+			/* ---- anatomy, slots, aria ---------------------------------------- */
+			const seen = [];
+			const box = document.createElement("div");
+			document.body.append(box);
+			const t = createTabs({
+				ariaLabel: "Demo",
+				tabs: [
+					{ value: "a", label: "A", panel: "panel a" },
+					{ value: "b", label: "B", panel: "panel b" },
+					{ value: "c", label: "C", panel: "panel c", disabled: true },
+					{ value: "d", label: "D", panel: "panel d" },
+				],
+				onSelect: (v) => seen.push(`cb:${v}`),
+			});
+			t.el.addEventListener("vui:select", (e) => seen.push(`ev:${e.detail.value}`));
+			box.append(t.el);
+
+			const list = t.el.querySelector('[role="tablist"]');
+			const tabs = [...t.el.querySelectorAll('[role="tab"]')];
+			const panels = [...t.el.querySelectorAll('[role="tabpanel"]')];
+			check("data-scope on root", t.el.dataset.scope === "tabs");
+			check("a tablist and four tabs", !!list && tabs.length === 4, `${tabs.length}`);
+			check("four panels", panels.length === 4, `${panels.length}`);
+			check("tablist is labelled", list.getAttribute("aria-label") === "Demo");
+			check("label slot", tabs[0].textContent === "A", tabs[0].textContent);
+			check("panel slot", panels[0].textContent === "panel a", panels[0].textContent);
+			check(
+				"the tabs carry no class — the base layer paints them by role",
+				tabs.every((x) => x.className === ""),
+				tabs.map((x) => x.className).join("|"),
+			);
+			check(
+				"aria-controls points at the panel",
+				tabs[0].getAttribute("aria-controls") === panels[0].id && !!panels[0].id,
+			);
+			check(
+				"aria-labelledby points back at the tab",
+				panels[0].getAttribute("aria-labelledby") === tabs[0].id && !!tabs[0].id,
+			);
+			check("disabled def -> disabled button", tabs[2].disabled === true);
+
+			/* ---- the initial state is written, not reported -------------------- */
+			check("first tab selected by default", t.selected.get() === "a");
+			check("aria-selected on it", tabs[0].getAttribute("aria-selected") === "true");
+			check(
+				"roving tabindex: one stop, on the selected tab",
+				tabs.map((x) => x.tabIndex).join() === "0,-1,-1,-1",
+				tabs.map((x) => x.tabIndex).join(),
+			);
+			check("its panel is shown", !panels[0].hasAttribute("hidden"));
+			check("the others are hidden", panels[1].hasAttribute("hidden"));
+			await tick();
+			check("the initial selection fires nothing", seen.length === 0, seen.join());
+
+			/* ---- hidden="until-found": a findable panel ------------------------ */
+			check(
+				'an enabled tab’s panel is hidden="until-found"',
+				panels[1].getAttribute("hidden") === "until-found",
+				panels[1].getAttribute("hidden"),
+			);
+			check(
+				"a disabled tab's panel is plainly hidden (a hit there could not select)",
+				panels[2].getAttribute("hidden") === "",
+				JSON.stringify(panels[2].getAttribute("hidden")),
+			);
+			if (CSS.supports("content-visibility", "hidden-matchable")) {
+				const cv = getComputedStyle(panels[1]).contentVisibility;
+				check("…and the browser makes it matchable", cv === "hidden-matchable", cv);
+				check(
+					"…while a plainly hidden one is display:none",
+					getComputedStyle(panels[2]).display === "none",
+					getComputedStyle(panels[2]).display,
+				);
+				check(
+					"a findable panel adds no empty band (no padding of its own)",
+					panels[1].getBoundingClientRect().height === 0,
+					String(panels[1].getBoundingClientRect().height),
+				);
+			}
+			// the browser fires `beforematch` right before it reveals a match
+			seen.length = 0;
+			panels[3].dispatchEvent(new Event("beforematch", { bubbles: false }));
+			check(
+				"beforematch selects that tab (caught in the capture phase)",
+				t.selected.get() === "d" && !panels[3].hasAttribute("hidden"),
+				t.selected.get(),
+			);
+			check("…and reports it once", seen.join() === "cb:d,ev:d", seen.join());
+			t.select("a");
+
+			/* ---- select(): every route, one report ----------------------------- */
+			seen.length = 0;
+			t.select("b");
+			check("select(): observable", t.selected.get() === "b");
+			check(
+				"select(): aria + tabindex moved",
+				tabs[1].getAttribute("aria-selected") === "true" && tabs[1].tabIndex === 0 &&
+					tabs[0].tabIndex === -1,
+			);
+			check(
+				"select(): the panel swapped",
+				!panels[1].hasAttribute("hidden") && panels[0].hasAttribute("hidden"),
+			);
+			check("select() -> onSelect + vui:select", seen.join() === "cb:b,ev:b", seen.join());
+			seen.length = 0;
+			t.select("b");
+			check("select() of the current tab is a no-op", seen.length === 0, seen.join());
+			t.select("nope");
+			t.select("c");
+			check(
+				"select() ignores unknown and disabled",
+				t.selected.get() === "b",
+				t.selected.get(),
+			);
+			check("…and stayed quiet about it", seen.length === 0, seen.join());
+
+			seen.length = 0;
+			tabs[0].click();
+			check(
+				"a click selects",
+				t.selected.get() === "a" && seen.join() === "cb:a,ev:a",
+				seen.join(),
+			);
+
+			/* ---- accessors, and disabled read live ----------------------------- */
+			check("tab(value)", t.tab("b") === tabs[1]);
+			check("panel(value)", t.panel("b") === panels[1]);
+			check("unknown value -> undefined", t.tab("nope") === undefined);
+			t.tab("b").disabled = true;
+			t.select("b");
+			check(
+				"disabling a tab takes effect at once",
+				t.selected.get() === "a",
+				t.selected.get(),
+			);
+			t.tab("b").disabled = false;
+
+			/* ---- keyboard: auto activation (horizontal) ------------------------- */
+			tabs[0].focus();
+			key(tabs[0], "ArrowRight");
+			check(
+				"ArrowRight moves focus",
+				document.activeElement === tabs[1],
+				document.activeElement?.textContent,
+			);
+			check("…and selects as it moves (auto)", t.selected.get() === "b", t.selected.get());
+			key(tabs[1], "ArrowRight");
+			check(
+				"…skipping the disabled one",
+				document.activeElement === tabs[3] && t.selected.get() === "d",
+				t.selected.get(),
+			);
+			key(tabs[3], "ArrowRight");
+			check("…and wrapping", t.selected.get() === "a", t.selected.get());
+			key(tabs[0], "ArrowLeft");
+			check("ArrowLeft wraps the other way", t.selected.get() === "d", t.selected.get());
+			key(tabs[3], "Home");
+			check("Home -> first", t.selected.get() === "a", t.selected.get());
+			key(tabs[0], "End");
+			check("End -> last enabled", t.selected.get() === "d", t.selected.get());
+			key(tabs[3], "ArrowDown");
+			check(
+				"the other axis is left to the page (horizontal)",
+				t.selected.get() === "d",
+				t.selected.get(),
+			);
+			const ev = new KeyboardEvent("keydown", {
+				key: "ArrowLeft",
+				bubbles: true,
+				cancelable: true,
+			});
+			tabs[3].dispatchEvent(ev);
+			check("a handled arrow is preventDefault()ed", ev.defaultPrevented);
+
+			/* ---- keyboard: manual activation ------------------------------------ */
+			const m = createTabs({
+				activation: "manual",
+				tabs: [
+					{ value: "x", label: "X", panel: "x" },
+					{ value: "y", label: "Y", panel: "y" },
+				],
+			});
+			box.append(m.el);
+			const mTabs = [...m.el.querySelectorAll('[role="tab"]')];
+			mTabs[0].focus();
+			key(mTabs[0], "ArrowRight");
+			check("manual: the arrow moves focus", document.activeElement === mTabs[1]);
+			check("manual: …and does not select", m.selected.get() === "x", m.selected.get());
+			mTabs[1].click(); // what Enter / Space do on a <button>
+			check(
+				"manual: Enter/Space (a click) selects",
+				m.selected.get() === "y",
+				m.selected.get(),
+			);
+			m.destroy();
+
+			/* ---- vertical ------------------------------------------------------- */
+			const v = createTabs({
+				orientation: "vertical",
+				tabs: [
+					{ value: "1", label: "One", panel: "one" },
+					{ value: "2", label: "Two", panel: "two" },
+				],
+			});
+			box.append(v.el);
+			const vTabs = [...v.el.querySelectorAll('[role="tab"]')];
+			const vList = v.el.querySelector('[role="tablist"]');
+			check(
+				"vertical: data-orientation on the root",
+				v.el.dataset.orientation === "vertical",
+			);
+			check(
+				"vertical: aria-orientation on the strip",
+				vList.getAttribute("aria-orientation") === "vertical",
+			);
+			vTabs[0].focus();
+			key(vTabs[0], "ArrowDown");
+			check("vertical: ArrowDown moves", v.selected.get() === "2", v.selected.get());
+			key(vTabs[1], "ArrowRight");
+			check(
+				"vertical: the other axis is left to the page",
+				v.selected.get() === "2",
+				v.selected.get(),
+			);
+			key(vTabs[1], "ArrowUp");
+			check("vertical: ArrowUp moves back", v.selected.get() === "1", v.selected.get());
+			const vListCs = getComputedStyle(vList);
+			check(
+				"vertical: the strip is a column",
+				vListCs.flexDirection === "column",
+				vListCs.flexDirection,
+			);
+			check(
+				"vertical: the rail moved to the inline edge",
+				vListCs.borderBottomWidth === "0px" && vListCs.borderRightWidth === "1px",
+				`${vListCs.borderBottomWidth}/${vListCs.borderRightWidth}`,
+			);
+			check(
+				"vertical: so did the indicator",
+				getComputedStyle(vTabs[0]).borderRightColor === "rgb(1, 2, 3)",
+				getComputedStyle(vTabs[0]).borderRightColor,
+			);
+			v.destroy();
+
+			/* ---- defaults, slots, nesting, destroy ------------------------------ */
+			const d = createTabs({ tabs: [{ label: "first" }, { label: "second" }] });
+			box.append(d.el);
+			check("value defaults to the index", d.selected.get() === "0" && !!d.tab("1"));
+			d.destroy();
+
+			const child = createView((track) => {
+				const el = fromTemplate("tpl-child");
+				let hits = 0;
+				track(delegate(el, { activate: () => hits++ }));
+				return { el, hits: () => hits };
+			});
+			const nested = createTabs({
+				tabs: [
+					{ value: "view", label: "view", panel: child },
+					{
+						value: "node",
+						label: "node",
+						panel: (() => {
+							const p = document.createElement("p");
+							p.textContent = "an element";
+							return p;
+						})(),
+					},
+				],
+			});
+			box.append(nested.el);
+			check("a view slot is mounted", child.el.isConnected);
+			check(
+				"an element slot is placed",
+				nested.panel("node").querySelector("p")?.textContent === "an element",
+			);
+			child.el.querySelector("button").click();
+			check("nested data-scope: the child's own 'activate' fired", child.hits() === 1);
+			check(
+				"nested data-scope: it did not reach the tabs",
+				nested.selected.get() === "view",
+				nested.selected.get(),
+			);
+			nested.destroy();
+			check("destroy(): root removed", !nested.el.isConnected);
+			check("destroy(): mounted child view removed too", !child.el.isConnected);
+
+			/* ---- the tab is a BASE control --------------------------------------- */
+			t.select("a"); // the arrow keys above left "b" selected
+			const cs = getComputedStyle(tabs[0]);
+			// `inline-flex` blockifies to `flex`: a tab is a flex item of the strip
+			check(
+				"tab: laid out by the base layer",
+				/^(inline-)?flex$/.test(cs.display),
+				cs.display,
+			);
+			check("tab: pointer cursor", cs.cursor === "pointer", cs.cursor);
+			check("tab: control min-height", cs.minHeight === "40px", cs.minHeight);
+			check(
+				"tab: muted while unselected",
+				getComputedStyle(tabs[1]).color === "rgb(7, 8, 9)",
+				getComputedStyle(tabs[1]).color,
+			);
+			check(
+				"tab: the selected one carries the indicator",
+				cs.borderBottomColor === "rgb(1, 2, 3)" && cs.borderBottomWidth === "2px",
+				`${cs.borderBottomColor} ${cs.borderBottomWidth}`,
+			);
+			check(
+				"tab: an unselected one does not",
+				getComputedStyle(tabs[1]).borderBottomColor === "rgba(0, 0, 0, 0)",
+				getComputedStyle(tabs[1]).borderBottomColor,
+			);
+			check(
+				"tab: it is not a filled button",
+				cs.backgroundColor === "rgba(0, 0, 0, 0)",
+				cs.backgroundColor,
+			);
+			const listCs = getComputedStyle(list);
+			check(
+				"strip: the rail",
+				listCs.borderBottomWidth === "1px",
+				listCs.borderBottomWidth,
+			);
+			check(
+				"strip: it scrolls rather than wraps",
+				listCs.overflowX === "auto",
+				listCs.overflowX,
+			);
+
+			// button(label, { role: "tab" }) carries .vui-btn too — the role must win
+			const loose = document.createElement("div");
+			loose.className = "vui-tablist";
+			const made = button("made in JS", { role: "tab" });
+			loose.append(made);
+			document.body.append(loose);
+			const madeCs = getComputedStyle(made);
+			check(
+				"a .vui-btn with role=tab comes out a tab, not a button",
+				madeCs.backgroundColor === "rgba(0, 0, 0, 0)" &&
+					madeCs.borderBottomWidth === "2px",
+				`${madeCs.backgroundColor} ${madeCs.borderBottomWidth}`,
+			);
+			check(
+				".vui-tablist is the same strip outside a component",
+				getComputedStyle(loose).borderBottomWidth === "1px",
+				getComputedStyle(loose).borderBottomWidth,
+			);
+			loose.remove();
+
+			/* ---- inside a dialog: the panel stays findable ------------------------ */
+			const inner = createTabs({
+				tabs: [
+					{ value: "p", label: "P", panel: "p" },
+					{ value: "q", label: "Q", panel: "q" },
+				],
+			});
+			const dlg = createDialog({ title: "Tabs in a dialog", body: inner });
+			document.body.append(dlg.el);
+			dlg.open();
+			const innerPanels = [...inner.el.querySelectorAll('[role="tabpanel"]')];
+			check(
+				"in a dialog: the strip's controls take the panel's context",
+				getComputedStyle(inner.el.querySelector('[role="tab"]')).getPropertyValue(
+					"--vui-control-bg-hover",
+				).trim() === "rgb(4, 5, 6)",
+				getComputedStyle(inner.el.querySelector('[role="tab"]')).getPropertyValue(
+					"--vui-control-bg-hover",
+				),
+			);
+			if (CSS.supports("content-visibility", "hidden-matchable")) {
+				check(
+					"in a dialog: a hidden panel is still findable (not display:none)",
+					getComputedStyle(innerPanels[1]).display !== "none",
+					getComputedStyle(innerPanels[1]).display,
+				);
+			}
+			dlg.close();
+			await tick();
+			dlg.destroy();
+			t.destroy();
+			box.remove();
+
+			out.push("DONE");
+		} catch (e) {
+			out.push("ERROR " + (e && e.stack || e));
+		}
+		flush();
+		</script>
+	</body>
+</html>

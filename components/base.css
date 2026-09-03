@@ -18,25 +18,28 @@
  *      rounded card are not the same rounding, and a popover and a modal are
  *      not the same elevation.
  *
- *   3. THE CONTROL PRIMITIVES — buttons, inputs, menu items, summaries, the
- *      focus ring. A button is a *style* primitive, not a component: it has no
- *      behavior, and a factory could not reach the `<button value="save">` a
+ *   3. THE CONTROL PRIMITIVES — buttons, inputs, menu items, summaries, tabs,
+ *      the focus ring. A button is a *style* primitive, not a component: it has
+ *      no behavior, and a factory could not reach the `<button value="save">` a
  *      consumer writes inside a `<form method="dialog">` in a dialog's slot.
- *      CSS can. Four ways in:
+ *      CSS can. Five ways in:
  *
  *        <button class="vui-btn vui-btn--primary">   — anywhere on the page
  *        <button>                                    — inside any vui component
  *        <button role="menuitem">                    — a menu item, by its role
+ *        <button role="tab">                         — a tab, by its role
  *        <summary>                                   — a disclosure header, by
  *                                                      its element
  *
  *      The second is a zero-specificity default (see "the container hook"
  *      below), so slot content looks right with no consumer knowledge at all.
- *      The third is keyed on the ARIA role the popover's menu glue needs
- *      anyway — one attribute buys the semantics, the keyboard and the look.
- *      The fourth needs no key at all: inside a vui container a <summary> has
- *      exactly one shape it can take, so a plain <details> dropped into a
- *      dialog body or a disclosure panel comes out like the kit's own.
+ *      The third and fourth are keyed on the ARIA roles the popover's menu glue
+ *      and the tabs component's aria wiring need anyway — one attribute buys
+ *      the semantics, the keyboard and the look, and neither component gives
+ *      those elements a class of its own. The fifth needs no key at all: inside
+ *      a vui container a <summary> has exactly one shape it can take, so a
+ *      plain <details> dropped into a dialog body or a disclosure panel comes
+ *      out like the kit's own.
  *
  * CASCADE LAYERS. Everything here is in `vui.base`; every component's `@scope`
  * block is in `vui.components`. Layered styles lose to unlayered ones whatever
@@ -552,6 +555,114 @@
 		:where([open]) > &::after {
 			rotate: 225deg;
 			translate: 0 0.12em;
+		}
+	}
+
+	/* ── tabs ────────────────────────────────────────────────────────────────
+	   The fifth control — and the one container that ships beside it, because
+	   the two only make sense together: the strip draws a rail, and a selected
+	   tab's indicator sits ON that rail (that is what the negative margin is
+	   for). Split them and every future tab strip has to line the two up again.
+
+	   Keyed on the ROLES, like the menu item: `role="tablist"` and `role="tab"`
+	   are what the tabs component's aria wiring writes anyway, so they are also
+	   what paints — and components/tabs.html gives its tabs no class at all.
+	   `.vui-tablist` / `.vui-tab` are the same look outside a component: a nav
+	   of <a>s that reads as tabs needs no factory.
+
+	   The strip SCROLLS rather than wraps, so the rail stays one unbroken line
+	   however many tabs there are — which is also why a tab draws its focus
+	   ring INSIDE, like the menu item's and the summary's: an outset ring would
+	   be clipped by that scroll container. */
+	.vui-tablist,
+	:where([class^="vui-"], [class*=" vui-"]) :where([role="tablist"]) {
+		display: flex;
+		align-items: stretch;
+		gap: 0.25rem;
+		overflow-x: auto;
+		overscroll-behavior-x: contain;
+		scrollbar-width: thin;
+		border-block-end: var(--vui-border-width) solid var(--vui-border);
+	}
+	.vui-tablist[aria-orientation="vertical"],
+	:where([class^="vui-"], [class*=" vui-"]) :where([role="tablist"][aria-orientation="vertical"]) {
+		flex-direction: column;
+		overflow-x: visible;
+		border-block-end: 0;
+		border-inline-end: var(--vui-border-width) solid var(--vui-border);
+	}
+
+	/* `all: unset` first, as with every control here: it is what stops the bare
+	   <button> rule above from filling a tab and boxing it in — the tab rule is
+	   (0,1,0), the bare-button default is (0,0,0), so `unset` wins every
+	   property the tab does not go on to declare. Written after `.vui-btn` for
+	   the same reason the menu item is: at (0,1,0) they tie, and a tab built by
+	   button(label, { role: "tab" }) must come out a tab. */
+	.vui-tab,
+	:where([class^="vui-"], [class*=" vui-"]) :is([role="tab"]) {
+		all: unset;
+		box-sizing: border-box;
+		display: inline-flex;
+		flex: none;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5em;
+		cursor: pointer;
+		user-select: none;
+		white-space: nowrap;
+		/* one weight for every tab: bolding the selected one re-measures the
+		   text and the whole strip shifts under the pointer */
+		font-weight: 500;
+		line-height: 1.25;
+		min-height: var(--vui-control-min-height, 2.5rem);
+		padding: var(--vui-control-py, 0.5rem) var(--vui-control-px, 0.9rem);
+		border-radius: var(--vui-radius) var(--vui-radius) 0 0;
+		/* the indicator, transparent until selected — and pulled down over the
+		   strip's rail so the two read as one line, not two */
+		border-block-end: 2px solid transparent;
+		margin-block-end: calc(-1 * var(--vui-border-width));
+		color: var(--vui-muted-foreground);
+		transition:
+			background-color var(--vui-transition),
+			border-color var(--vui-transition),
+			color var(--vui-transition);
+
+		&:hover {
+			background: var(--vui-control-bg-hover, var(--vui-surface-hover));
+			color: var(--vui-control-foreground, var(--vui-surface-foreground));
+		}
+		/* drawn inside, like the menu item's and the summary's — see above */
+		&:focus-visible {
+			outline: var(--vui-focus-width) solid var(--vui-ring);
+			outline-offset: calc(-1 * var(--vui-focus-width));
+		}
+		/* selected is a full-strength label plus the indicator; the foreground
+		   comes off the context channel, so a tab strip inside a lifted surface
+		   reads against that surface and not the page */
+		&[aria-selected="true"] {
+			color: var(--vui-control-foreground, var(--vui-surface-foreground));
+			border-block-end-color: var(--vui-primary);
+		}
+		&:disabled,
+		&[aria-disabled="true"] {
+			cursor: not-allowed;
+			opacity: 0.5;
+			background: transparent;
+		}
+	}
+	/* vertical: the indicator moves to the rail's edge, and a tab becomes a row */
+	.vui-tablist[aria-orientation="vertical"] > :is(.vui-tab, [role="tab"]),
+	:where([class^="vui-"], [class*=" vui-"]) :where([role="tablist"][aria-orientation="vertical"]) > :is([role="tab"], .vui-tab) {
+		justify-content: flex-start;
+		text-align: start;
+		border-radius: var(--vui-radius) 0 0 var(--vui-radius);
+		border-block-end: 0;
+		margin-block-end: 0;
+		border-inline-end: 2px solid transparent;
+		margin-inline-end: calc(-1 * var(--vui-border-width));
+
+		&[aria-selected="true"] {
+			border-inline-end-color: var(--vui-primary);
 		}
 	}
 

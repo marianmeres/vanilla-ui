@@ -334,14 +334,20 @@ async function loadDisclosure(base = COMPONENTS_BASE) {
   const mod = await loadComponent(componentUrl("disclosure", base));
   return mod.createDisclosure;
 }
+async function loadTabs(base = COMPONENTS_BASE) {
+  await loadStyles(base);
+  const mod = await loadComponent(componentUrl("tabs", base));
+  return mod.createTabs;
+}
 async function loadAll(base = COMPONENTS_BASE) {
   await loadStyles(base);
-  const [createDialog, createDisclosure, createPopover] = await Promise.all([
+  const [createDialog, createDisclosure, createPopover, createTabs] = await Promise.all([
     loadDialog(base),
     loadDisclosure(base),
-    loadPopover(base)
+    loadPopover(base),
+    loadTabs(base)
   ]);
-  return { createDialog, createDisclosure, createPopover };
+  return { createDialog, createDisclosure, createPopover, createTabs };
 }
 export {
   BASE_STYLES_ID,
@@ -362,6 +368,7 @@ export {
   loadDisclosure,
   loadPopover,
   loadStyles,
+  loadTabs,
   loadTemplates,
   mount,
   observable,

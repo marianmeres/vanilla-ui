@@ -1,0 +1,332 @@
+<!--
+	vui · tabs — a tab strip and its panels, on the ARIA tabs pattern.
+
+	SINGLE-FILE COMPONENT: markup (<template>), styling (<style>, @scope'd and
+	@layer'd) and logic (inline <script type="module">) in one file. Load it with
+	loadComponent() (or the typed loadTabs() / loadAll() from the index).
+
+	This is the first primitive the platform has NO element for, so the component
+	is the wiring: it pairs each tab with its panel (ids, aria-controls,
+	aria-labelledby), moves the roving tabindex, and switches the panels. Two
+	platform pieces still do more than they look:
+
+	  hidden="until-found"  an inactive panel is findable. Ctrl+F for a word in
+	                        a tab you are not looking at and the browser reveals
+	                        it, fires `beforematch`, and this file selects that
+	                        tab. A browser without the feature treats the value
+	                        as a plain `hidden` — the panel is simply hidden,
+	                        which is what it would have been anyway.
+	  <button role="tab">   Enter and Space are the button's own; the strip's
+	                        look is the BASE layer's (components/base.css),
+	                        keyed on that same role. The tabs here carry no
+	                        class at all.
+
+	Props (all optional):
+	  tabs        Tab[]     [{ value?, label?, panel?, disabled? }, …]
+	                        `value` identifies the tab (default: its index),
+	                        `label` and `panel` are Slots
+	  selected    string    which `value` starts selected  [first enabled tab]
+	  orientation string    "horizontal" | "vertical"           [horizontal]
+	  activation  string    "auto"   — arrow keys select as they move
+	                        "manual" — arrows move focus, Enter/Space selects
+	                                                                  [auto]
+	  ariaLabel   string    accessible name for the tablist
+	  onSelect    (value, tab)  callback up, on every change
+
+	Returns a view:
+	  { el, selected, select(value), tab(value), panel(value), destroy() }
+
+	Events out (CustomEvent on `el`, bubbling):
+	  "vui:select"  detail: { value, tab, panel }  — on every change
+
+	It reports a CHANGE, not a state: whatever the consumer passed as `selected`
+	is the state the view was created in, and nothing fires for it. Every other
+	route — a click, the arrow keys, select(), find-in-page — funnels through
+	select() and fires exactly once.
+
+	Disabled is read LIVE, off the element: `tabs.tab("x").disabled = true`
+	takes it out of the keyboard order and out of select() from that moment on,
+	with nothing to re-render.
+
+	Imports the library by BARE specifier — loadComponent() runs this module
+	from a blob: URL, which resolves only through the host's import map.
+-->
+<template id="tpl-vui-tabs">
+	<div class="vui-tabs" data-scope="tabs" data-on="click:activate; keydown:keydown">
+		<div class="vui-tabs__list" role="tablist" data-ref="list"></div>
+		<div class="vui-tabs__panels" data-ref="panels"></div>
+	</div>
+</template>
+
+<!-- One tab. No class: `role="tab"` is what the base layer paints (and what the
+     keyboard glue below queries), so there is nothing here for this file to own. -->
+<template id="tpl-vui-tabs-tab">
+	<button type="button" role="tab" aria-selected="false" tabindex="-1"></button>
+</template>
+
+<!-- One panel. `hidden` is set per selection — "until-found" for a findable
+     panel, plain for the panel of a disabled tab (a find-in-page hit there
+     would reveal a panel that cannot be selected). -->
+<template id="tpl-vui-tabs-panel">
+	<div class="vui-tabs__panel" role="tabpanel" tabindex="-1" hidden="until-found"></div>
+</template>
+
+<!--
+	Styles are adopted into <head> verbatim (global cascade), encapsulated by
+	native CSS @scope against the root class and placed in the `vui.components`
+	cascade layer (declared, and ordered after `vui.base`, by components/base.css).
+
+	This block styles the tabs' own CHROME only, which here is nearly nothing:
+	the strip's rail and the tab's indicator, hover and focus ring belong to the
+	base layer (a tab is a control, keyed on `role="tab"`), so what is left is
+	the arrangement — where the panels sit relative to the strip — and the axis
+	switch. The strip is laid out but never painted here.
+
+	Tabs are laid ON the page rather than in a box of their own: no background,
+	no border, no shadow, and so no control context to re-declare — a tab strip
+	dropped into a dialog panel or a disclosure body takes that container's
+	context and reads against its surface.
+-->
+<style>
+@layer vui.components {
+	@scope (.vui-tabs) {
+		:scope {
+			display: block;
+			min-width: 0;
+		}
+		/* vertical: the strip becomes a rail beside the panels, stretched to
+		   the full height of the row so the divider runs the whole way down */
+		:scope[data-orientation="vertical"] {
+			display: flex;
+			align-items: stretch;
+		}
+		:scope[data-orientation="vertical"] > [role="tablist"] {
+			flex: none;
+		}
+
+		.vui-tabs__panels {
+			padding-block-start: 1rem;
+			line-height: 1.5;
+		}
+		:scope[data-orientation="vertical"] .vui-tabs__panels {
+			flex: 1;
+			min-width: 0;
+			padding-block-start: 0;
+			padding-inline-start: 1rem;
+		}
+
+		/* The panel a find-in-page hit can still reach is NOT display:none — it
+		   is `content-visibility: hidden-matchable`, a rendered box whose
+		   contents are skipped. So it must carry no padding of its own (the
+		   container above holds it) or every inactive panel would leave a band
+		   of empty space behind. The fade is the only motion: it plays when the
+		   attribute comes off, since the element was rendered all along. */
+		.vui-tabs__panel {
+			opacity: 1;
+			transition: opacity var(--vui-transition) ease-out;
+		}
+		.vui-tabs__panel[hidden] {
+			opacity: 0;
+		}
+
+		/* wins over the base layer's `display` on a hidden control — but not
+		   over a findable panel, which is exactly what the UA's own
+		   `[hidden]:not([hidden=until-found])` rule is careful about too */
+		:scope [hidden]:not([hidden="until-found"]) {
+			display: none;
+		}
+	}
+}
+</style>
+
+<script type="module">
+	import {
+		createView,
+		delegate,
+		fromTemplate,
+		mount,
+		observable,
+		refs,
+	} from "@marianmeres/vanilla";
+
+	let seq = 0;
+
+	/** Fill a slot from a `Slot` value: text | element | view (mounted + tracked). */
+	function fill(track, slot, content) {
+		if (content == null) return;
+		if (typeof content === "string") slot.textContent = content;
+		else if (content instanceof Node) slot.replaceChildren(content);
+		else mount(track, slot, content);
+	}
+
+	const TAB = '[role="tab"]';
+	/**
+	 * A tab the keyboard may land on and select. Read off the ELEMENT, every
+	 * time, so a consumer flipping `tabs.tab("x").disabled` takes effect at
+	 * once — and readable on a view that is not in the document yet, which
+	 * rules out the popover's `offsetParent` test.
+	 */
+	const enabled = (tab) =>
+		!tab.disabled &&
+		tab.getAttribute("aria-disabled") !== "true" &&
+		!tab.hasAttribute("hidden");
+
+	export function createTabs({
+		tabs = [],
+		selected,
+		orientation = "horizontal",
+		activation = "auto",
+		ariaLabel,
+		onSelect,
+	} = {}) {
+		return createView((track) => {
+			const el = fromTemplate("tpl-vui-tabs");
+			const r = refs(el);
+			const uid = `vui-tabs-${++seq}`;
+			const vertical = orientation === "vertical";
+
+			el.dataset.orientation = vertical ? "vertical" : "horizontal";
+			if (vertical) r.list.setAttribute("aria-orientation", "vertical");
+			if (ariaLabel) r.list.setAttribute("aria-label", ariaLabel);
+
+			// Built once, from the array, and never diffed — the panels are
+			// static (DESIGN §D8: a primitive that needs keyed list rendering is
+			// deferred, and this one does not). `entries` is the whole state.
+			const entries = new Map();
+			tabs.forEach((def, i) => {
+				const value = String(def?.value ?? i);
+				if (entries.has(value)) return; // first one wins; values are identity
+				const tab = fromTemplate("tpl-vui-tabs-tab");
+				const panel = fromTemplate("tpl-vui-tabs-panel");
+				tab.id = `${uid}-tab-${i}`;
+				panel.id = `${uid}-panel-${i}`;
+				tab.setAttribute("aria-controls", panel.id);
+				panel.setAttribute("aria-labelledby", tab.id);
+				tab.dataset.value = panel.dataset.value = value;
+				if (def?.disabled) tab.disabled = true;
+				fill(track, tab, def?.label ?? value);
+				fill(track, panel, def?.panel);
+				r.list.append(tab);
+				r.panels.append(panel);
+				entries.set(value, { value, tab, panel });
+			});
+
+			/** Every tab in document order — the keyboard's order, not the map's. */
+			const list = () => [...r.list.querySelectorAll(TAB)];
+			const current = observable("");
+
+			/** Write the selection everywhere it shows. Idempotent. */
+			const apply = (value) => {
+				for (const { tab, panel } of entries.values()) {
+					const on = tab.dataset.value === value;
+					tab.setAttribute("aria-selected", String(on));
+					// roving tabindex: one stop for the whole strip, on the
+					// selected tab — Tab leads out of the strip, arrows move
+					// within it (an arrowed-to tab is focusable at -1)
+					tab.tabIndex = on ? 0 : -1;
+					panel.tabIndex = on ? 0 : -1;
+					if (on) panel.removeAttribute("hidden");
+					// findable, unless its tab cannot be selected — the browser
+					// removes `hidden` when it reveals a match, and a match in a
+					// disabled tab's panel would leave two panels showing
+					else panel.setAttribute("hidden", enabled(tab) ? "until-found" : "");
+				}
+				// nothing selected (no tabs, or all of them disabled): keep the
+				// strip reachable anyway
+				if (!entries.has(value)) list()[0]?.setAttribute("tabindex", "0");
+				current.set(value);
+			};
+
+			const api = {
+				el,
+				selected: current,
+				select(value) {
+					const entry = entries.get(String(value));
+					if (!entry || !enabled(entry.tab) || current.get() === entry.value) {
+						return;
+					}
+					apply(entry.value);
+					onSelect?.(entry.value, entry.tab);
+					el.dispatchEvent(
+						new CustomEvent("vui:select", {
+							bubbles: true,
+							detail: {
+								value: entry.value,
+								tab: entry.tab,
+								panel: entry.panel,
+							},
+						}),
+					);
+				},
+				tab: (value) => entries.get(String(value))?.tab,
+				panel: (value) => entries.get(String(value))?.panel,
+			};
+
+			// The state the view was created in — written, not reported.
+			const wanted = entries.get(String(selected));
+			apply(
+				wanted && enabled(wanted.tab)
+					? wanted.value
+					: list().find(enabled)?.dataset.value ?? "",
+			);
+
+			track(
+				delegate(el, {
+					// a click is a selection whatever the activation mode; Enter
+					// and Space arrive here too, as the <button>'s own click
+					activate: (e) => {
+						const tab = e.target.closest?.(TAB);
+						if (tab && r.list.contains(tab)) api.select(tab.dataset.value);
+					},
+					keydown: (e) => {
+						const tab = e.target.closest?.(TAB);
+						if (!tab || !r.list.contains(tab)) return;
+						const all = list().filter(enabled);
+						if (!all.length) return;
+						const i = all.indexOf(tab);
+						// the axis the strip is drawn on, and the direction it
+						// is read in — the other pair is left to the page
+						let [prev, next] = vertical
+							? ["ArrowUp", "ArrowDown"]
+							: ["ArrowLeft", "ArrowRight"];
+						if (!vertical && getComputedStyle(el).direction === "rtl") {
+							[prev, next] = [next, prev];
+						}
+						const go = (n) => {
+							e.preventDefault();
+							const target = all[(n + all.length) % all.length];
+							target.focus();
+							// "auto": selection follows focus, which is the ARIA
+							// pattern's default for panels as cheap as these
+							if (activation !== "manual") api.select(target.dataset.value);
+						};
+						switch (e.key) {
+							case next:
+								return go(i < 0 ? 0 : i + 1);
+							case prev:
+								return go(i < 0 ? -1 : i - 1);
+							case "Home":
+								return go(0);
+							case "End":
+								return go(-1);
+						}
+					},
+				}),
+			);
+
+			// Find-in-page reached into a hidden panel: the browser is about to
+			// reveal it, so select its tab and let the whole strip agree. Listened
+			// for in the CAPTURE phase, which sees the event at the panel whether
+			// or not the engine bubbles it — `delegate` could only take it if it
+			// bubbled.
+			const found = (e) => {
+				const panel = e.target.closest?.(".vui-tabs__panel");
+				if (panel && r.panels.contains(panel)) api.select(panel.dataset.value);
+			};
+			r.panels.addEventListener("beforematch", found, true);
+			track(() => r.panels.removeEventListener("beforematch", found, true));
+
+			return api;
+		});
+	}
+</script>
