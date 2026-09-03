@@ -1,7 +1,9 @@
 <!--
 	vui · popover — an anchored, light-dismissing surface on the native Popover
-	API. With `role: "menu"` it is a menu: the same surface plus the aria and
-	keyboard glue over the items inside it.
+	API. Two modes ride on the same surface and the same placement: `role:
+	"menu"` adds the aria and keyboard glue over the items inside it, and `role:
+	"tooltip"` adds hover/focus triggering, aria-describedby, and a box the
+	pointer cannot reach.
 
 	SINGLE-FILE COMPONENT: markup (<template>), styling (<style>, @scope'd and
 	@layer'd) and logic (inline <script type="module">) in one file. Load it with
@@ -37,9 +39,11 @@
 	                             anchor's.                        [bottom-start]
 	  offset        number       gap from the anchor, in px                  [4]
 	  role          string       the root's ARIA role, set as given ("dialog",
-	                             "listbox", …). "menu" ALSO switches on the
-	                             menu behavior below.                    [none]
-	  trigger       boolean      clicking the anchor toggles              [true]
+	                             "listbox", …). "menu" and "tooltip" ALSO
+	                             switch on the behavior below.           [none]
+	  trigger       boolean      wires the anchor: click toggles, or (tooltip)
+	                             hover and keyboard focus show           [true]
+	  delay         number       (tooltip) ms a hover must last          [120]
 	  closeOnSelect boolean      (menu) activating an item closes         [true]
 	  onOpen        ()           callback up, after the native `toggle`
 	  onClose       ()           callback up, after the native `toggle`
@@ -54,6 +58,16 @@
 	the item's `value` attribute (else data-value, else its text) and, by
 	default, closes. Disabled (`disabled`, aria-disabled) and hidden items are
 	skipped.
+
+	TOOLTIP (`role: "tooltip"`): hover or keyboard-focus the anchor and the box
+	appears; leave, blur, click or press Esc and it goes. The anchor gets
+	aria-describedby (never aria-expanded — a tooltip is not an expandable
+	widget), the box is `popover="hint"` where that exists and `popover="manual"
+	` where it does not, and it is `pointer-events: none` on purpose: a tooltip
+	the pointer can enter is a popover somebody mislabelled, and making it
+	physically unreachable is what keeps aria-describedby honest. So: text, no
+	controls. Hover waits `delay` ms; keyboard focus does not wait, and only
+	:focus-visible counts, so clicking a button does not leave its tip hanging.
 
 	Returns a view: { el, anchor, isOpen, open(), close(), toggle(), destroy() }
 
@@ -169,6 +183,18 @@
 		:scope[role="menu"] {
 			padding: 0;
 		}
+		/* a tooltip is a label, not a container: tighter, narrower, the element
+		   radius rather than the container one — and unreachable by the pointer,
+		   which is the design (see the header) and not an optimisation */
+		:scope[role="tooltip"] {
+			padding: 0.35rem 0.55rem;
+			border-radius: var(--vui-radius, 0.5rem);
+			max-width: 20rem;
+			font-size: 0.875rem;
+			line-height: 1.4;
+			pointer-events: none;
+			overflow: hidden;
+		}
 		/* wins over the base layer's `display` on a hidden control or item —
 		   but never over a `hidden="until-found"` box (a tabs panel in a slot),
 		   which the UA's own rule is careful about in exactly the same way */
@@ -237,13 +263,16 @@ const enabled = (item) =>
 /** The roles that make the anchor's aria-haspopup meaningful. */
 const HASPOPUP = ["menu", "listbox", "tree", "grid", "dialog"];
 
+// `role` is destructured BEFORE `placement` on purpose: a tooltip's sensible
+// default side is not a menu's, and a default may only read a name already bound.
 export function createPopover({
 	anchor,
 	body,
-	placement = "bottom-start",
-	offset = 4,
 	role,
+	placement = role === "tooltip" ? "top" : "bottom-start",
+	offset = 4,
 	trigger = true,
+	delay = 120,
 	closeOnSelect = true,
 	onOpen,
 	onClose,
@@ -256,11 +285,21 @@ export function createPopover({
 		const el = fromTemplate("tpl-vui-popover");
 		const isOpen = observable(false);
 		const menu = role === "menu";
+		const tip = role === "tooltip";
 		const anchored = anchorPositioning();
 		const open = () => el.matches(":popover-open");
 		el.id = `vui-popover-${++seq}`;
 		if (role) el.setAttribute("role", role);
 		if (menu && anchor.id) el.setAttribute("aria-labelledby", anchor.id);
+		if (tip) {
+			// `hint` is the state the platform made for exactly this: it light
+			// dismisses and takes Esc, but it does NOT close an open auto popover,
+			// so a tip inside a menu does not shut the menu. Where it does not
+			// exist the attribute is invalid and reflects back as `manual`, which
+			// is the right fallback anyway — the wiring below opens and closes it.
+			el.popover = "hint";
+			if (el.popover !== "hint") el.popover = "manual";
+		}
 		// destroy() removes the node; removing an open popover hides it with no
 		// `toggle` event, so settle the observable ourselves.
 		track(() => isOpen.set(false));
@@ -272,9 +311,15 @@ export function createPopover({
 			anchor.setAttribute(name, value);
 			track(() => anchor.removeAttribute(name));
 		};
-		set("aria-expanded", "false");
-		set("aria-controls", el.id);
-		if (HASPOPUP.includes(role)) set("aria-haspopup", role);
+		if (tip) {
+			// a tooltip DESCRIBES its anchor; it is not a widget the anchor
+			// expands, so aria-expanded / aria-controls would both be lies
+			set("aria-describedby", el.id);
+		} else {
+			set("aria-expanded", "false");
+			set("aria-controls", el.id);
+			if (HASPOPUP.includes(role)) set("aria-haspopup", role);
+		}
 
 		if (anchored) {
 			// name the anchor (keeping any name it already has), point the
@@ -295,7 +340,43 @@ export function createPopover({
 			el.style.positionTryFallbacks = "none";
 		}
 
-		if (trigger) {
+		if (trigger && tip) {
+			// hover and focus, never click: the invoker relationship the other
+			// modes lean on is a TOGGLE, which is not what a tooltip does
+			let timer;
+			const cancel = () => clearTimeout(timer);
+			const on = (type, fn) => {
+				anchor.addEventListener(type, fn);
+				track(() => anchor.removeEventListener(type, fn));
+			};
+			const hide = () => {
+				cancel();
+				api.close();
+			};
+			on("pointerenter", () => {
+				cancel();
+				timer = setTimeout(() => api.open(), delay);
+			});
+			on("pointerleave", hide);
+			// :focus-visible, so a mouse click on a <button> (which Chrome
+			// focuses and Safari does not) never leaves a tip hanging behind it
+			on("focus", () => {
+				if (anchor.matches(":focus-visible")) {
+					cancel();
+					api.open();
+				}
+			});
+			on("blur", hide);
+			on("click", hide);
+			track(cancel);
+			// Esc closes a `hint` popover natively; the `manual` fallback needs
+			// this, and on the native path the open() guard makes it a no-op
+			const onKey = (e) => {
+				if (e.key === "Escape" && open()) api.close();
+			};
+			document.addEventListener("keydown", onKey, true);
+			track(() => document.removeEventListener("keydown", onKey, true));
+		} else if (trigger) {
 			if ("popoverTargetElement" in anchor) {
 				// a <button> / <input>: the platform's own invoker relationship
 				anchor.popoverTargetElement = el;
@@ -389,7 +470,7 @@ export function createPopover({
 		 *  and a bare togglePopover() all arrive there and nowhere else). */
 		const settle = (isNowOpen) => {
 			isOpen.set(isNowOpen);
-			anchor.setAttribute("aria-expanded", String(isNowOpen));
+			if (!tip) anchor.setAttribute("aria-expanded", String(isNowOpen));
 			if (isNowOpen) {
 				place();
 				follow();
@@ -407,8 +488,10 @@ export function createPopover({
 				if (open()) return;
 				if (!el.isConnected) anchor.after(el);
 				// `source`: the invoker, for browsers that take it (nesting, light
-				// dismiss); older ones ignore the argument
-				el.showPopover({ source: anchor });
+				// dismiss); older ones ignore the argument. A tooltip passes none
+				// — it is not invoked, and an invoker would exempt the anchor from
+				// light dismiss it never needed.
+				tip ? el.showPopover() : el.showPopover({ source: anchor });
 				settle(true);
 			},
 			close() {

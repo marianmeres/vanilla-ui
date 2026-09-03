@@ -19,27 +19,37 @@
  *      not the same elevation.
  *
  *   3. THE CONTROL PRIMITIVES — buttons, inputs, menu items, summaries, tabs,
- *      the focus ring. A button is a *style* primitive, not a component: it has
- *      no behavior, and a factory could not reach the `<button value="save">` a
- *      consumer writes inside a `<form method="dialog">` in a dialog's slot.
- *      CSS can. Five ways in:
+ *      switches, the focus ring. A button is a *style* primitive, not a
+ *      component: it has no behavior, and a factory could not reach the
+ *      `<button value="save">` a consumer writes inside a `<form
+ *      method="dialog">` in a dialog's slot. CSS can. Six ways in:
  *
  *        <button class="vui-btn vui-btn--primary">   — anywhere on the page
  *        <button>                                    — inside any vui component
  *        <button role="menuitem">                    — a menu item, by its role
  *        <button role="tab">                         — a tab, by its role
+ *        <input type="checkbox" role="switch">       — a switch, by its role
  *        <summary>                                   — a disclosure header, by
  *                                                      its element
  *
  *      The second is a zero-specificity default (see "the container hook"
  *      below), so slot content looks right with no consumer knowledge at all.
- *      The third and fourth are keyed on the ARIA roles the popover's menu glue
- *      and the tabs component's aria wiring need anyway — one attribute buys
- *      the semantics, the keyboard and the look, and neither component gives
- *      those elements a class of its own. The fifth needs no key at all: inside
- *      a vui container a <summary> has exactly one shape it can take, so a
- *      plain <details> dropped into a dialog body or a disclosure panel comes
- *      out like the kit's own.
+ *      The middle three are keyed on the ARIA roles the popover's menu glue,
+ *      the tabs component's aria wiring and a switch's own semantics need
+ *      anyway — one attribute buys the semantics, the keyboard and the look,
+ *      and no component gives those elements a class of its own. The last needs
+ *      no key at all: inside a vui container a <summary> has exactly one shape
+ *      it can take, so a plain <details> dropped into a dialog body or a
+ *      disclosure panel comes out like the kit's own.
+ *
+ *   4. THE CHROME AND THE HELPERS — a badge, an alert, a card, a table, and the
+ *      three layout classes (`.vui-row`, `.vui-field`, `.vui-menu`). None of
+ *      them is a control: nothing here hovers, focuses or presses, so none of
+ *      them reads the control channel. They are here for the reason the
+ *      controls are — they are markup a consumer writes, which a factory can
+ *      never reach — and they stop where that argument stops. A card is three
+ *      declarations of the container tier; it is not the beginning of a grid
+ *      system.
  *
  * CASCADE LAYERS. Everything here is in `vui.base`; every component's `@scope`
  * block is in `vui.components`. Layered styles lose to unlayered ones whatever
@@ -400,6 +410,85 @@
 		cursor: pointer;
 	}
 
+	/* ── checkboxes, radios, ranges ──────────────────────────────────────────
+	   Tinted, never painted. The UA glyph is better than anything the kit would
+	   draw and it is already correct in both color schemes, so the whole job is
+	   one platform property pointed at the theme. (This is the other half of
+	   why the input block above must not `all: unset`: the glyph it would take
+	   with it is the thing being tinted here.) */
+	.vui-check,
+	:where([class^="vui-"], [class*=" vui-"]) :where(input:is([type="checkbox"], [type="radio"], [type="range"]), progress) {
+		accent-color: var(--vui-primary);
+	}
+
+	/* ── switches ────────────────────────────────────────────────────────────
+	   The sixth control, and the third keyed on a role. A checkbox that says
+	   `role="switch"` IS a switch: the platform gives the semantics, the Space
+	   key, `:checked`, the disabled state and form participation, so the kit
+	   only has to draw it — no factory, no JS, no `aria-checked` to keep in
+	   sync. `.vui-switch` is the same look outside a container.
+
+	   The knob moves with `inset-inline-start`, not a translate: the logical
+	   property is direction-aware, so the switch flips itself in RTL and the
+	   transition still animates. Sizes are local so one override reshapes both
+	   halves; the fill is the primary role, because a switch has exactly one
+	   "on" and no variants to speak of. */
+	.vui-switch,
+	:where([class^="vui-"], [class*=" vui-"]) :where(input[type="checkbox"][role="switch"]) {
+		--_track: 2.25rem;
+		--_knob: 0.9rem;
+		--_pad: 0.15rem;
+		appearance: none;
+		box-sizing: border-box;
+		flex: none;
+		position: relative;
+		display: inline-block;
+		inline-size: var(--_track);
+		block-size: calc(var(--_knob) + 2 * var(--_pad) + 2 * var(--vui-border-width));
+		margin: 0;
+		padding: 0;
+		border: var(--vui-border-width) solid var(--vui-border);
+		border-radius: 9999px;
+		/* not `--vui-muted`: a theme is free to put muted a hair off its surface
+		   (zinc does), and an OFF switch nobody can see is worse than no switch.
+		   A mix off the foreground is visibly "off" in both color schemes by
+		   construction, whatever the theme did. */
+		background: color-mix(in srgb, var(--vui-foreground) 15%, transparent);
+		cursor: pointer;
+		transition:
+			background-color var(--vui-transition),
+			border-color var(--vui-transition);
+
+		&::before {
+			content: "";
+			position: absolute;
+			inset-block-start: 50%;
+			inset-inline-start: var(--_pad);
+			inline-size: var(--_knob);
+			block-size: var(--_knob);
+			border-radius: 50%;
+			background: var(--vui-surface);
+			box-shadow: var(--vui-shadow);
+			translate: 0 -50%;
+			transition:
+				inset-inline-start var(--vui-transition),
+				background-color var(--vui-transition);
+		}
+		&:checked {
+			background: var(--vui-primary);
+			border-color: transparent;
+
+			&::before {
+				inset-inline-start: calc(100% - var(--_knob) - var(--_pad));
+				background: var(--vui-primary-foreground);
+			}
+		}
+		&:disabled {
+			cursor: not-allowed;
+			opacity: 0.5;
+		}
+	}
+
 	/* ── menu items ──────────────────────────────────────────────────────────
 	   The third control: an item in a menu (a popover with `role: "menu"`).
 	   Keyed on the ROLE, not a class — whoever writes `role="menuitem"` (which
@@ -561,8 +650,9 @@
 	/* ── tabs ────────────────────────────────────────────────────────────────
 	   The fifth control — and the one container that ships beside it, because
 	   the two only make sense together: the strip draws a rail, and a selected
-	   tab's indicator sits ON that rail (that is what the negative margin is
-	   for). Split them and every future tab strip has to line the two up again.
+	   tab's indicator sits ON that rail (that is what the strip drawing it
+	   INSIDE itself is for, below). Split them and every future tab strip has
+	   to line the two up again.
 
 	   Keyed on the ROLES, like the menu item: `role="tablist"` and `role="tab"`
 	   are what the tabs component's aria wiring writes anyway, so they are also
@@ -582,13 +672,24 @@
 		overflow-x: auto;
 		overscroll-behavior-x: contain;
 		scrollbar-width: thin;
-		border-block-end: var(--vui-border-width) solid var(--vui-border);
+		/* The rail, drawn INSIDE the strip — an inset shadow along the bottom
+		   of the padding box, not a border below it. `overflow-x: auto` makes
+		   the strip a scroll container in BOTH axes (the block axis is coerced
+		   from `visible` to `auto`), so anything that reaches past that padding
+		   box is scrollable overflow: a tab pulled down over a border would be
+		   1px of it, and 1px is enough for the strip to grow a vertical
+		   scrollbar and clip the indicator it was reaching with. A shadow is
+		   ink, it stays put while the strip scrolls, and the tab covers it
+		   without leaving the box at all. */
+		box-shadow: inset 0 calc(-1 * var(--vui-border-width)) 0 0 var(--vui-border);
 	}
 	.vui-tablist[aria-orientation="vertical"],
 	:where([class^="vui-"], [class*=" vui-"]) :where([role="tablist"][aria-orientation="vertical"]) {
 		flex-direction: column;
 		overflow-x: visible;
-		border-block-end: 0;
+		/* not a scroll container on either axis, so the rail can be a plain
+		   border and the tab can be pulled over it the obvious way */
+		box-shadow: none;
 		border-inline-end: var(--vui-border-width) solid var(--vui-border);
 	}
 
@@ -617,10 +718,11 @@
 		min-height: var(--vui-control-min-height, 2.5rem);
 		padding: var(--vui-control-py, 0.5rem) var(--vui-control-px, 0.9rem);
 		border-radius: var(--vui-radius) var(--vui-radius) 0 0;
-		/* the indicator, transparent until selected — and pulled down over the
-		   strip's rail so the two read as one line, not two */
+		/* the indicator, transparent until selected. The strip's rail is drawn
+		   inside the strip (see above), so the bottom 2px of the tab already
+		   sit on it — covering it, and reading as one line and not two, with
+		   nothing to pull and nothing hanging out of the scroll container. */
 		border-block-end: 2px solid transparent;
-		margin-block-end: calc(-1 * var(--vui-border-width));
 		color: var(--vui-muted-foreground);
 		transition:
 			background-color var(--vui-transition),
@@ -657,13 +759,174 @@
 		text-align: start;
 		border-radius: var(--vui-radius) 0 0 var(--vui-radius);
 		border-block-end: 0;
-		margin-block-end: 0;
 		border-inline-end: 2px solid transparent;
 		margin-inline-end: calc(-1 * var(--vui-border-width));
 
 		&[aria-selected="true"] {
 			border-inline-end-color: var(--vui-primary);
 		}
+	}
+
+	/* ── badges ──────────────────────────────────────────────────────────────
+	   Not a control: nothing here hovers, focuses or presses. So a badge reads
+	   the ROLE vocabulary directly rather than the control channel — a badge
+	   inside a dialog panel must stay the color it was told to be, while every
+	   button around it lifts to surface-1. Same five roles, same names. */
+	.vui-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3em;
+		padding: 0.1rem 0.45rem;
+		border: var(--vui-border-width) solid var(--vui-border);
+		border-radius: var(--vui-radius);
+		background: var(--vui-muted);
+		color: var(--vui-muted-foreground);
+		font-size: 0.8em;
+		font-weight: 600;
+		line-height: 1.6;
+		white-space: nowrap;
+		vertical-align: middle;
+	}
+	.vui-badge--primary,
+	.vui-badge--accent,
+	.vui-badge--destructive,
+	.vui-badge--warning,
+	.vui-badge--success {
+		border-color: transparent;
+	}
+	.vui-badge--primary {
+		background: var(--vui-primary);
+		color: var(--vui-primary-foreground);
+	}
+	.vui-badge--accent {
+		background: var(--vui-accent);
+		color: var(--vui-accent-foreground);
+	}
+	.vui-badge--destructive {
+		background: var(--vui-destructive);
+		color: var(--vui-destructive-foreground);
+	}
+	.vui-badge--warning {
+		background: var(--vui-warning);
+		color: var(--vui-warning-foreground);
+	}
+	.vui-badge--success {
+		background: var(--vui-success);
+		color: var(--vui-success-foreground);
+	}
+
+	/* ── alerts ──────────────────────────────────────────────────────────────
+	   The toast's treatment (see components/toast.html), standing still: a
+	   surface with a 12% wash of the role, its border tinted to match, and the
+	   role at full strength on the icon alone. Same recipe, same numbers, and
+	   for the same reason — a tinted box keeps ONE control context, so a button
+	   or a ✕ inside an alert is the same control it is anywhere else, and the
+	   text stays at surface contrast on every theme with no white-on-amber to
+	   check. A filled box would need its own context per role and could not
+	   carry a ghost button at all. */
+	.vui-alert {
+		display: flex;
+		gap: var(--vui-gap);
+		align-items: flex-start;
+		padding: 0.75rem;
+		border: var(--vui-border-width) solid var(--vui-border);
+		border-radius: var(--vui-radius-container);
+		background: var(--vui-surface);
+		color: var(--vui-surface-foreground);
+
+		& > .vui-alert__icon {
+			flex: none;
+			line-height: 1.5;
+			color: var(--_tint, var(--vui-muted-foreground));
+		}
+		& > .vui-alert__body {
+			flex: 1;
+			min-inline-size: 0;
+		}
+		& .vui-alert__title {
+			font-weight: 600;
+		}
+	}
+	.vui-alert--primary {
+		--_tint: var(--vui-primary);
+	}
+	.vui-alert--accent {
+		--_tint: var(--vui-accent);
+	}
+	.vui-alert--destructive {
+		--_tint: var(--vui-destructive);
+	}
+	.vui-alert--warning {
+		--_tint: var(--vui-warning);
+	}
+	.vui-alert--success {
+		--_tint: var(--vui-success);
+	}
+	.vui-alert:is(.vui-alert--primary, .vui-alert--accent, .vui-alert--destructive, .vui-alert--warning, .vui-alert--success) {
+		background: color-mix(in srgb, var(--_tint) 12%, var(--vui-surface));
+		border-color: color-mix(in srgb, var(--_tint) 35%, transparent);
+	}
+
+	/* ── cards ───────────────────────────────────────────────────────────────
+	   The container tier of the structural tokens, spelled out: the same
+	   surface, container radius and RESTING shadow the dialog panel and the
+	   popover already differ from. A card may lift the controls inside it the
+	   way the dialog panel does — one `--vui-control-bg` — but it does not by
+	   default, because a card on the page is not a panel over one. */
+	.vui-card {
+		padding: 1rem;
+		border: var(--vui-border-width) solid var(--vui-border);
+		border-radius: var(--vui-radius-container);
+		background: var(--vui-surface);
+		color: var(--vui-surface-foreground);
+		box-shadow: var(--vui-shadow);
+	}
+
+	/* ── tables ──────────────────────────────────────────────────────────────
+	   A style, not a component — a <table> is markup a consumer writes, and CSS
+	   reaches it. Rules, a muted header, tabular figures, and a header that
+	   sticks IF an ancestor scrolls (put the table in an `overflow: auto` box
+	   and it works; on the page it is inert). Sorting is behavior and is not
+	   here: it belongs to the page, or to `enhance`, not to a stylesheet. */
+	.vui-table {
+		inline-size: 100%;
+		border-collapse: collapse;
+		font-variant-numeric: tabular-nums;
+
+		& :is(th, td) {
+			padding: var(--vui-control-py, 0.45rem) 0.6rem;
+			text-align: start;
+			border-block-end: var(--vui-border-width) solid var(--vui-border);
+		}
+		& th {
+			font-weight: 600;
+			color: var(--vui-muted-foreground);
+			white-space: nowrap;
+		}
+		& thead th {
+			position: sticky;
+			inset-block-start: 0;
+			z-index: 1;
+			background: var(--vui-surface);
+		}
+		& tbody tr:hover {
+			background: var(--vui-surface-hover);
+		}
+		& tfoot :is(th, td) {
+			border-block-end: 0;
+			border-block-start: var(--vui-border-width) solid var(--vui-border);
+		}
+		/* the one alignment a data table always needs, and the one place a
+		   number column should not be guessed at */
+		& :is(th, td):is(.vui-num) {
+			text-align: end;
+		}
+	}
+	/* zebra is off the FOREGROUND, not `--vui-muted`, for the reason the switch
+	   track is: a stripe that a theme can flatten into its own surface is a
+	   class that silently does nothing. */
+	.vui-table--zebra tbody tr:nth-child(even of :not([hidden])) {
+		background: color-mix(in srgb, var(--vui-foreground) 4%, transparent);
 	}
 
 	/* ── layout helpers the kit's own chrome and its consumers both need ────── */
@@ -685,6 +948,26 @@
 		}
 		& > :where(input, select, textarea) {
 			inline-size: 100%;
+		}
+		& > .vui-help {
+			display: block;
+			margin-block-start: 0.35rem;
+			font-size: 0.85rem;
+			color: var(--vui-muted-foreground);
+		}
+	}
+	/* Invalid is `:user-invalid`, not `:invalid` — the platform's own "they have
+	   actually interacted with this" state, so an untouched form does not open
+	   in red. `[data-invalid]` is the same look for a server-side error the
+	   browser knows nothing about; both are the field's, not the control's, so
+	   a component may set the attribute without painting anything. */
+	.vui-field:is([data-invalid], :has(:user-invalid)) {
+		& > label,
+		& > .vui-help {
+			color: var(--vui-destructive);
+		}
+		& > :where(input, select, textarea) {
+			border-color: var(--vui-destructive);
 		}
 	}
 	/* a vertical list of menu items, with its separators. Layout only: the items

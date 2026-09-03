@@ -117,18 +117,49 @@ theme** for the check no script makes — does it look right. What is unit-teste
 index (URL resolution, re-exports) and the **anatomy** of every component file (§3) on a
 parsed copy with `linkedom` — the contract everything else relies on.
 
+**A third check sits between the two.** Some changes are meant to be invisible — a reformat,
+a selector rewritten to mean the same thing, a base-layer refactor — and neither a diff nor
+the browser tests can settle that, because they check behavior, not layout. So
+`scripts/render-fingerprint.ts` loads a page in headless Chrome and writes down what it
+actually rendered: the body's text, the top layer's, and every element's tag, class and
+bounding box to a tenth of a pixel. `deno task fingerprint` captures the baseline; `--check`
+compares against it and prints the boxes that moved. Geometry and text rather than
+screenshots, deliberately — no image diffing, no per-platform rendering noise, and a failure
+you can read. The baseline lands in gitignored `tmp/` because it is a before/after pair inside
+one piece of work, not a committed snapshot that would need regenerating every time the
+gallery legitimately changes. It is worth anything only because it is deterministic: a fresh
+browser profile per run (so the gallery's remembered theme cannot leak between them), a fixed
+viewport, and a settle past the kit's longest transition. `scripts/_chrome.ts` is the DevTools
+plumbing, shared with the browser suite.
+
 Two lessons baked into the dialog test: native `<dialog>` fires `close` **asynchronously**, so
 tests await the event, never a timer — and the component resets `returnValue` _after_ reading
 it in that handler, not on `open()`, so a re-open can never race a pending close. And removing
 an open dialog fires no `close` at all, so `destroy()` settles `isOpen` itself.
 
-### D8 — Platform first, and defer what needs a reconciler
+### D8 — Platform first, and wait where the platform is mid-flight
 
 Native `<dialog>` gives the top layer, backdrop, focus trap, Esc and focus restore. The
 Popover API gives light-dismiss. `<details>` gives disclosure. Each primitive should be mostly
-chrome plus keyboard/aria glue. Primitives that need **keyed list rendering** (select,
-combobox) would push vanilla toward a reconciler it deliberately does not have — they come
-last, and only with a design discussion first.
+chrome plus keyboard/aria glue — which is also the test for when _not_ to build one.
+
+Select and combobox are the one place the platform has not arrived. A native `<select>` still
+cannot be restyled the way the kit needs (customizable `<select>` / `appearance: base-select`
+is shipping in Chromium and not yet everywhere), so a listbox built today means owning the
+popup, the roving `aria-activedescendant`, typeahead, multi-select and form participation —
+the largest component in the kit by a wide margin, and one that would be built a second time
+if the native one lands. It is also the first primitive with a real _value_ model rather than
+a boolean or an identity: something that round-trips with a form and is settable from outside,
+which is a design conversation that has not happened. So it waits (§5) — and it costs little
+while it does, because base.css already paints the native `<select>` (D9): a prototype's form
+looks like the kit today.
+
+An earlier version of this decision deferred them for a different reason — that they need
+**keyed list rendering**, and would push vanilla toward a reconciler it deliberately does not
+have. That was wrong, and D12 and D13 are why: tabs reads an array once and stamps clones,
+toast appends to and removes from a `Map`, and a combobox would filter by toggling `hidden` on
+options it rendered once — the same live read the popover's menu does over its items. The
+no-reconciler boundary still stands (§6); it is simply not what is holding select back.
 
 ### D9 — One base layer: the vocabulary and the controls
 
@@ -142,7 +173,8 @@ fallbacks, the focus ring typed out twice.
 
 `components/base.css` is the answer, and it is deliberately **not a component**: no template,
 no script, no `data-scope`. `loadStyles()` — awaited by every `load<Name>()` — injects it once
-as `<style id="vui-base">`, prepended to `<head>`. It holds exactly two things.
+as `<style id="vui-base">`, prepended to `<head>`. It holds three things — the vocabulary, the
+controls, and a little chrome.
 
 **1. The vocabulary.** Every `--vui-color-*` token the kit reads is resolved here, once, under
 **the token's own name minus `color-`** with its canonical system-color fallback
@@ -181,8 +213,9 @@ Three mechanisms make it hold together:
 - **A context channel, not descendant selectors.** A container never reaches into a control
   (`.vui-dialog__footer button { … }` is the anti-pattern — every future container has to
   repeat it and get it right). It re-declares `--vui-control-bg` / `-foreground` / `-bg-hover`
-  / `-bg-active` / `-border` (and the sizes: `-min-height`, `-py`, `-px`) **on itself**, and
-  controls inherit. The dialog panel lifts everything inside it to `surface-1` in five lines:
+  / `-bg-active` / `-border` (and the sizes: `-min-height`, `-py`, `-px`, and `-size` for a
+  square icon button) **on itself**, and controls inherit. The dialog panel lifts everything
+  inside it to `surface-1` in five lines:
   its own ✕, footer buttons built by `button()`, and a consumer's bare `<form>` buttons alike —
   and it composes through nesting.
 
@@ -203,7 +236,9 @@ Three mechanisms make it hold together:
   container it sits in, because a declaration on the element beats an inherited one; and a
   consumer's own role is the same five lines on a class the kit has never heard of. `--ghost`
   is the exception that proves it — not a role but a treatment, so it keeps one explicit
-  `color` to borrow the container's foreground on hover.
+  `color` to borrow the container's foreground on hover. `--icon` is the other treatment and
+  declares no color at all: a square sized by `--vui-control-size`, for a single glyph like
+  the dialog's ✕.
 - **Enforcement, not memory.** `tests/components.test.ts` fails a component that reads a
   `--vui-color-*` token directly, reads or sets a `--vui-*` name base.css does not declare,
   hard-codes a color outside a `var()` fallback, or sets a paint property (background, border,
@@ -216,16 +251,24 @@ own `#vui-base` element). For this audience — prototypes, where a slot that lo
 zero classes is the entire point — that is a good trade. It would not be for a public library
 styling other people's markup.
 
-**The fourth control is keyed on an element.** A `<summary>` inside a vui container is
-painted as a row — full width, transparent at rest, hover and active from the channel, the
-UA marker replaced by a caret that turns with its `<details>`'s `[open]`. Keyed on the
-element because, unlike a `<button>`, a `<summary>` has exactly one shape it can take here;
-`.vui-summary` is that look outside a container. Its focus ring is drawn inside, like the
-menu item's, because the disclosure box clips itself to its radius. That the row belongs to
-base and not to `components/disclosure.html` is D9's own argument applied a second time: a
-plain `<details>` a consumer drops into a dialog body is markup the factory never sees, and
-CSS reaches it anyway. The lint counts `summary` as a control, so no component can take it
-back.
+**The second control needs no key at all, and one exception.** Text inputs, selects and
+textareas are painted by element inside a vui container, and by `.vui-input` outside one — and
+they are the one control that does _not_ open with `all: unset`, because that would take the
+`<select>`'s arrow and the checkbox and radio glyphs with it. This block paints and does
+nothing else. What makes a `<select>` and a `<button>` the same height in a `.vui-row` is that
+both read the same channel (`--vui-control-min-height`, `-py`), so a container that shrinks its
+controls shrinks the whole row rather than half of it. The fill is its own vocabulary entry
+(`--vui-input`, plus a hover) and not `surface`, because a field is its own color in every
+generated theme — `Field` in the system fallback — and should read as a well, not as another
+slab of the panel it sits on. It is also why the missing select component (D8, §5) costs so
+little: the native one already looks like the kit.
+
+The same exception decides its other half. A checkbox, a radio and a range are **tinted, not
+drawn**: one `accent-color: var(--vui-primary)` puts the UA's own glyph on the theme, and that
+glyph is already correct in both color schemes, at every zoom, with the platform's own hit area
+and animation. Anything the kit drew instead would be a worse copy that has to be maintained.
+So the reset that would have destroyed those glyphs is the reset this control does not do, and
+the one property that themes them is the whole implementation.
 
 **The third control is keyed on a role.** A menu item is `<button role="menuitem">` — the
 attribute the menu's keyboard and aria glue need anyway — and inside a vui container that is
@@ -238,6 +281,61 @@ does not fill its items) but takes hover and active from the channel, so a surfa
 controls lifts the items' hover with them. `.vui-btn--destructive` on an item would paint its
 foreground white on nothing; `.vui-menuitem--destructive` — colored text, tinted hover — is the
 one modifier.
+
+**The fourth control is keyed on an element.** A `<summary>` inside a vui container is
+painted as a row — full width, transparent at rest, hover and active from the channel, the
+UA marker replaced by a caret that turns with its `<details>`'s `[open]`. Keyed on the
+element because, unlike a `<button>`, a `<summary>` has exactly one shape it can take here;
+`.vui-summary` is that look outside a container. Its focus ring is drawn inside, like the
+menu item's, because the disclosure box clips itself to its radius. That the row belongs to
+base and not to `components/disclosure.html` is D9's own argument applied a second time: a
+plain `<details>` a consumer drops into a dialog body is markup the factory never sees, and
+CSS reaches it anyway. The lint counts `summary` as a control, so no component can take it
+back.
+
+**The sixth control is keyed on a role, over an element the platform already finished.** A
+switch is `<input type="checkbox" role="switch">`, and that markup arrives with the semantics,
+the Space key, `:checked`, `disabled`, the form value and the announcement already correct — so
+the kit draws a track and a knob and adds not one line of script. There is no `createSwitch`,
+no `aria-checked` to keep in sync, and `el.checked = true` is the API, because it was always
+the API. The knob moves on `inset-inline-start` rather than a `translate`, because the logical
+property is direction-aware: the switch flips itself in RTL and still animates. And its resting
+track is mixed off `--vui-foreground` rather than `--vui-muted` — a theme is free to put muted a
+hair off its own surface (zinc does), and an OFF switch nobody can see is worse than no switch.
+That last one is a rule, not a detail: a state that must be legible cannot be spent on a token a
+theme is allowed to flatten.
+
+**3. The chrome.** A badge, an alert, a card, a table, and the three layout classes (`.vui-row`,
+`.vui-field`, `.vui-menu`). None of them is a control — nothing here hovers, focuses or presses
+— so **none of them reads the control channel**, and a badge inside a dialog panel keeps the
+color it was told to be while every button around it lifts to `surface-1`. They are here for the
+reason the controls are, and the test is the same one: a card, a callout, a table and a labelled
+field are markup a consumer writes as often as the kit does, and a factory can never reach it.
+Four decisions worth keeping:
+
+- **The alert is the toast's treatment (D13) standing still** — the same 12% wash of the role,
+  the same tinted border, the role at full strength on the icon alone. Same recipe because it
+  buys the same thing: a tinted box keeps ONE control context, so an alert holds a `.vui-btn` or
+  a ghost ✕ with no per-role handling, and the text keeps surface contrast on every theme. Toast
+  and alert are one visual idea with and without a timer, and the moment they are written twice
+  they start to drift.
+- **The table's header sticks only if an ancestor scrolls.** `position: sticky` and nothing else
+  — no measurement, no clone row, no JS. Wrap it in an `overflow: auto` box and it works; leave
+  it on the page and the rule is inert, which is the correct behavior, not a limitation. Sorting
+  is behavior and is deliberately absent: it belongs to the page, or to `enhance`.
+- **Zebra is mixed off the foreground**, for the switch track's reason above. A stripe some
+  themes flatten into their own surface is a class that silently does nothing.
+- **A field marks its error on the field, not the control.** `[data-invalid]` for something the
+  browser cannot know (a server said so), and `:has(:user-invalid)` for the rest — the
+  platform's own post-interaction state, never `:invalid`, which would open every empty required
+  form in red. Both sit on the container, so a component can flag a field without painting a
+  control (D9's rule holds even here).
+
+The line this stops at is worth writing down, because this is exactly how a base layer becomes
+the CSS framework D2 forbids: base paints markup a consumer writes and a factory cannot reach.
+A card, an alert, a badge, a table and a field pass that test. A skeleton, an avatar, a
+breadcrumb and a spacing scale do not — they are decoration nobody's slot content depends on,
+and they are not coming.
 
 ### D10 — Popover: the platform dismisses, CSS places, JS fills only the gap
 
@@ -285,6 +383,40 @@ first item on open, ↑ ↓ Home End, hover-to-focus, Tab closes, `vui:select` w
 contract), and the glue is thirty lines over markup the consumer writes anyway. Items are
 markup, not an `items` array: that is P2, and it is also what keeps a keyed-list reconciler out
 (D8) — the popover queries `[role^="menuitem"]` at keydown time and holds no list state.
+
+**Tooltip is the second mode, and mostly a list of things it is not.** The expensive half of a
+tooltip is placement — anchor positioning, the try-fallbacks, the JS path for browsers without
+them — and that was paid for above. What is left is triggering and aria, about forty lines. It
+is a mode for the same reason the menu is: a separate `tooltip.html` would have to restate the
+placement whole, because components import only vanilla and cross-file composition does not
+exist (§3).
+
+Four differences from every other popover, each of them the point:
+
+- **`popover="hint"`, not `auto`.** Hint is the state the platform added for exactly this: it
+  light-dismisses and takes Esc, but it does not close an open auto popover — so a tip on a
+  button inside a menu does not shut the menu. Where hint does not exist the attribute is
+  invalid and reflects back as `manual`, which is the right fallback anyway, since the hover and
+  focus wiring is what opens and closes it. (Contrast D10's all-or-nothing anchor-positioning
+  check: here the degraded path is the same tooltip with one less dismissal route, so there is
+  nothing to detect.)
+- **The anchor is _described_, not expanded.** `aria-describedby`, and neither `aria-expanded`
+  nor `aria-controls` — a tooltip is not a widget its anchor expands, and every other mode's
+  aria would be a lie a screen reader repeats.
+- **No invoker.** The native invoker relationship is a _toggle_ — the thing this mode
+  specifically does not do. So the anchor gets hover and focus listeners instead, and only
+  `:focus-visible` counts: Chrome focuses a `<button>` on click and Safari does not, so
+  listening to plain `focus` would strand a tip behind a click in one browser and not the other.
+  The platform already computes that distinction; the kit just asks.
+- **`pointer-events: none`, as a design decision.** A tooltip the pointer can enter is a popover
+  somebody mislabelled. Making it physically unreachable is what keeps `aria-describedby`
+  honest — text goes in and nothing else _can_ — and it removes the whole "keep it open while
+  the pointer travels to it" apparatus that only exists to serve content that should not be
+  there. The cost is real and accepted: no link inside a tooltip, ever.
+
+Tooltips are the most-abused a11y primitive there is, and shipping one is a defensible choice
+only because the alternative here is every prototype hand-rolling a worse one. The constraints
+above are what make it defensible; loosening them would not be a feature.
 
 ### D11 — Disclosure: the platform _is_ the component
 
@@ -334,9 +466,9 @@ that takes a list. Both are worth saying out loud.
   component exists to write. There is no markup a consumer already has that carries it, so
   asking for it would mean asking them to hand-author the aria and then having the component
   check it. The array is read **once**, at creation; nothing is diffed, nothing is keyed, and
-  the panels are static — which is the promise the roadmap made and the reason D8's
-  "defer what needs a reconciler" is not in play. (Stuic's `TabbedMenu` is items-driven too,
-  but it is only the strip: it reports a `value` and leaves the panels to the page. Owning
+  the panels are static — which is the promise the roadmap made and the reason the no-reconciler
+  boundary (§6) is not in play. (Stuic's `TabbedMenu` is items-driven too, but it is only the
+  strip: it reports a `value` and leaves the panels to the page. Owning
   both is what buys the pairing, and it is the whole difference between the two components.)
 
 - **The tab is the fifth base control (D9), keyed on `role="tab"`.** Same move as the menu
@@ -344,10 +476,13 @@ that takes a list. Both are worth saying out loud.
   `components/base.css` paints them — with `.vui-tab` / `.vui-tablist` for a hand-written
   strip outside a component (a nav of `<a>`s that reads as tabs needs no factory). The strip
   comes with it, in the same block, because the two are one idea: the strip draws the rail
-  and a selected tab's indicator is pulled down **over** that rail, and splitting them means
+  and a selected tab's indicator sits **on** that rail, covering it, and splitting them means
   lining the two up again in every future tab strip. The strip **scrolls** rather than wraps
   so the rail stays one unbroken line — which is also why a tab's focus ring is drawn inside,
-  as the menu item's and the summary's are. The lint counts `[role="tab"]` and `.vui-tab` as
+  as the menu item's and the summary's are, and why the strip draws its rail **inside** its
+  own padding box (an inset shadow) rather than as a border under it: `overflow-x: auto`
+  scrolls the block axis too, so a tab reaching a pixel past the strip to cover a border is a
+  pixel to scroll, and the strip grows a scrollbar down its side and clips the indicator. The lint counts `[role="tab"]` and `.vui-tab` as
   controls, so no component can take them back.
 
 - **A panel that is not showing is still findable.** An inactive panel is
@@ -382,9 +517,9 @@ The fifth primitive is the first that is a **region** rather than a widget: `cre
 builds a rail, and every `show()` puts one message in it. That inversion decides the rest.
 
 - **It is a list, and D8 still holds.** A toast region only ever appends and removes; nothing
-  is ever re-rendered from a model, so there is no diffing and no keys — the "defer what needs
-  a reconciler" line is not crossed, it is simply not approached. What tabs took as an array
-  (D12) this one takes one call at a time, because the messages arrive one at a time. The
+  is ever re-rendered from a model, so there is no diffing and no keys — the no-reconciler
+  line (§6) is not crossed, it is simply not approached. What tabs took as an array (D12)
+  this one takes one call at a time, because the messages arrive one at a time. The
   only list state is a `Map` of live toasts, and it exists for two features that need
   identity: the repeat badge and the capacity cap.
 
@@ -433,6 +568,45 @@ builds a rail, and every `show()` puts one message in it. That inversion decides
 There is deliberately no icon set (the kit has no icon story; `icon` is a `Slot` like every
 other), no length-scaled TTL, and no queue behind the cap: a toast that never got shown is a
 toast that no longer matters.
+
+---
+
+### D14 — The drawer is a prop, not a component
+
+A drawer and a bottom sheet are what a prototype reaches for after the dialog: a mobile nav, a
+filter panel, a detail pane. Every kit ships them as their own components. Here they are one
+prop on the dialog, `placement`, and the reason is D8 read carefully: the expensive parts of a
+drawer are the top layer, the focus trap, Esc, focus restore and the backdrop, and `<dialog>`
+already gave all five to the dialog. What is actually different between a modal and a drawer is
+which edge the box is pinned to and which way it arrives — margins, sizes and one keyframe.
+
+A separate `drawer.html` would have had to restate all of it (components import only vanilla;
+cross-file composition does not exist, by the anatomy contract in §3), and then keep two copies
+of the return-value convention, the slot filling and the close plumbing in step forever. The
+same argument that made "menu" a _mode_ of the popover (D10) makes "drawer" a _placement_ of the
+dialog. `modal` was already there and composes with it for free: an edge placement with
+`modal: false` is a side panel you can still work around.
+
+Three details are load-bearing:
+
+- **`position: fixed`, declared.** The UA stylesheet makes a modal `<dialog>` fixed and a
+  non-modal one `absolute`. Inherit that and a non-modal drawer hangs off its nearest positioned
+  ancestor instead of the viewport — which is exactly the case the prop exists to serve, so the
+  component states the position rather than accepting the platform's split. This is the one
+  place in the file where the platform's default is deliberately overridden, and it is pinned by
+  a browser test that puts a non-modal drawer inside a `position: relative` box.
+- **The edges are logical, the slide with them.** `start` / `end` rather than left / right, with
+  the margins, the corner radii and the `--_slide` custom property all following the document
+  direction (`:dir(rtl)` flips the last one). One keyframe reads `--_slide` off the element, so
+  four edges and both directions cost one animation, not five.
+- **`box-sizing: border-box` on the root.** Found by the test that asserts a sheet is exactly as
+  wide as the viewport: the dialog's own 1px border was pushing `width: 100vw` two pixels past
+  it, and had been quietly doing the same to `min(32rem, …)` since the first commit. A stated
+  width should be the width.
+
+There is deliberately no `size` prop and no resizing. A prototype that needs a wider drawer sets
+a width on `.vui-dialog` — which is CSS the consumer already owns, unlayered, and wins for free
+(D9).
 
 ---
 
@@ -512,14 +686,19 @@ path for the `.html` files.
 
 In this order — each one mostly platform:
 
-| # | Component       | Built on                       | Notes                                                                      |
-| - | --------------- | ------------------------------ | -------------------------------------------------------------------------- |
-| 1 | dialog          | `<dialog>`                     | ✅ shipped                                                                 |
-| 2 | menu / popover  | Popover API (`popover="auto"`) | ✅ shipped — one `popover` component, `role: "menu"` for the menu (D10)    |
-| 3 | disclosure      | `<details>` / `<summary>`      | ✅ shipped — `name` is the accordion, `::details-content` the motion (D11) |
-| 4 | tabs            | roving `tabindex`, aria-tabs   | ✅ shipped — a tab is a base control; `hidden=until-found` panels (D12)    |
-| 5 | toast           | region + timers                | ✅ shipped — a rail in the top layer; append-and-remove, no diffing (D13)  |
-| — | select/combobox | listbox + keyed options        | **deferred** — needs keyed lists (D8)                                      |
+| # | Component       | Built on                       | Notes                                                                            |
+| - | --------------- | ------------------------------ | -------------------------------------------------------------------------------- |
+| 1 | dialog          | `<dialog>`                     | ✅ shipped — `placement` makes it a drawer or a sheet, same component (D14)      |
+| 2 | popover         | Popover API (`popover="auto"`) | ✅ shipped — one component; `role: "menu"` and `role: "tooltip"` are modes (D10) |
+| 3 | disclosure      | `<details>` / `<summary>`      | ✅ shipped — `name` is the accordion, `::details-content` the motion (D11)       |
+| 4 | tabs            | roving `tabindex`, aria-tabs   | ✅ shipped — a tab is a base control; `hidden=until-found` panels (D12)          |
+| 5 | toast           | region + timers                | ✅ shipped — a rail in the top layer; append-and-remove, no diffing (D13)        |
+| — | select/combobox | listbox + popup                | **deferred** — no platform element yet, and a value model to design (D8)         |
+
+The five are shipped and nothing is queued behind them, so this is a record more than a plan.
+The deferred row is the only open question, and D8 says what would reopen it: a native
+`<select>` that can be restyled everywhere the kit runs. Until then base.css paints the
+native one and a prototype's form is fine without a component.
 
 ---
 
@@ -535,8 +714,10 @@ In this order — each one mostly platform:
 - **No custom elements.** Light-DOM custom elements wrapping these factories would give
   attribute props and framework-agnostic use — a reasonable _outer shell_ later, never the
   foundation (it complicates the `enhance` story and adds a concept).
-- **No keyed-list reconciler.** If select/combobox ever need it, the answer is a tiny
-  identity-keyed mount helper discussed with vanilla's design doc, not a vdom.
+- **No keyed-list reconciler.** Nothing has needed one yet, select and combobox included
+  (D8): tabs stamps an array once, toast appends and removes, and a filtered list is
+  `hidden` toggled on options rendered once. If a component ever does need it, the answer is
+  a tiny identity-keyed mount helper discussed with vanilla's design doc, not a vdom.
 - **No automatic style scoping.** `@scope` against the root class is the mechanism; it is
   explicit, native and free.
 - **No slot/children system** beyond `Slot`. No named slots, no projection.

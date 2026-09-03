@@ -92,7 +92,8 @@ function declarationBlocks(css: string): { selector: string; body: string }[] {
  * Does this selector target a control the base layer owns? The class tests are
  * anchored so a container never counts as its own control: `.vui-tabs`,
  * `.vui-tablist` and `.vui-tabs__panels` are a component's to lay out and to
- * paint, while `.vui-tab` and `[role="tab"]` are base's alone.
+ * paint, while `.vui-tab` and `[role="tab"]` are base's alone. `.vui-table` is
+ * likewise a container's — the anchored `.vui-tab` test does not reach it.
  */
 const paintsAControl = (selector: string) =>
 	/(^|[\s,>+~(])(button|select|textarea|input|summary)\b/.test(selector) ||
@@ -100,9 +101,12 @@ const paintsAControl = (selector: string) =>
 	selector.includes(".vui-input") ||
 	selector.includes(".vui-menuitem") ||
 	selector.includes(".vui-summary") ||
+	selector.includes(".vui-switch") ||
+	selector.includes(".vui-check") ||
 	/\.vui-tab(?![\w-])/.test(selector) ||
 	/\.vui-tablist(?![\w-])/.test(selector) ||
 	/\[role[\^$*]?=["']?menuitem/.test(selector) ||
+	/\[role[\^$*]?=["']?switch/.test(selector) ||
 	/\[role[\^$*]?=["']?tab(list)?["']?[\s\]]/.test(selector);
 
 /** Properties that decide how a control LOOKS — base's job, never a component's. */

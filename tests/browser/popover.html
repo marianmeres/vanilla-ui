@@ -647,6 +647,85 @@
 			}
 			am.remove();
 
+			/* ---- tooltip -------------------------------------------------------- */
+			const ta = anchorAt("top: 300px; left: 300px", "tip anchor");
+			const tip = createPopover({
+				anchor: ta,
+				role: "tooltip",
+				body: "Explains the thing",
+				delay: 0,
+			});
+			check("tooltip: role", tip.el.getAttribute("role") === "tooltip");
+			// `hint` where the platform has it, `manual` where it does not — never
+			// `auto`, which would close whatever auto popover is already open
+			check(
+				"tooltip: popover=hint (or manual)",
+				["hint", "manual"].includes(tip.el.getAttribute("popover")),
+				tip.el.getAttribute("popover"),
+			);
+			check(
+				"tooltip: anchor gets aria-describedby",
+				ta.getAttribute("aria-describedby") === tip.el.id,
+			);
+			check("tooltip: and NOT aria-expanded", !ta.hasAttribute("aria-expanded"));
+			check("tooltip: and NOT aria-controls", !ta.hasAttribute("aria-controls"));
+			check("tooltip: starts closed", !tip.isOpen.get());
+
+			// hover shows it, leaving hides it — the invoker relationship the other
+			// modes use is a toggle, which is not what a tooltip does
+			ta.dispatchEvent(new PointerEvent("pointerenter", { bubbles: false }));
+			await new Promise((r) => setTimeout(r, 30));
+			check(
+				"tooltip: pointerenter shows it",
+				tip.isOpen.get() && tip.el.matches(":popover-open"),
+			);
+			check(
+				"tooltip: the pointer cannot reach it",
+				getComputedStyle(tip.el).pointerEvents === "none",
+				getComputedStyle(tip.el).pointerEvents,
+			);
+			check(
+				"tooltip: sits above its anchor by default",
+				rect(tip.el).bottom <= rect(ta).top + 1.5,
+				`${fmt(rect(tip.el))} vs anchor ${fmt(rect(ta))}`,
+			);
+			ta.dispatchEvent(new PointerEvent("pointerleave", { bubbles: false }));
+			await new Promise((r) => setTimeout(r, 30));
+			check("tooltip: pointerleave hides it", !tip.isOpen.get());
+
+			// Esc, whether the platform's light dismiss covers it (`hint`) or not
+			tip.open();
+			await new Promise((r) => setTimeout(r, 10));
+			key("Escape");
+			await new Promise((r) => setTimeout(r, 30));
+			check("tooltip: Esc closes it", !tip.isOpen.get());
+
+			// a click on the anchor puts the tip away — it has said its piece
+			ta.dispatchEvent(new PointerEvent("pointerenter", { bubbles: false }));
+			await new Promise((r) => setTimeout(r, 30));
+			ta.click();
+			await new Promise((r) => setTimeout(r, 30));
+			check("tooltip: clicking the anchor hides it", !tip.isOpen.get());
+
+			// the hover delay is a real wait, not a rounding
+			const sa = anchorAt("top: 360px; left: 300px", "slow");
+			const slow = createPopover({ anchor: sa, role: "tooltip", body: "S", delay: 300 });
+			sa.dispatchEvent(new PointerEvent("pointerenter", { bubbles: false }));
+			await new Promise((r) => setTimeout(r, 60));
+			check("tooltip: delay holds it back", !slow.isOpen.get());
+			sa.dispatchEvent(new PointerEvent("pointerleave", { bubbles: false }));
+			await new Promise((r) => setTimeout(r, 350));
+			check("tooltip: leaving before the delay cancels it", !slow.isOpen.get());
+			slow.destroy();
+			sa.remove();
+
+			tip.destroy();
+			check(
+				"tooltip: destroy() takes aria-describedby back",
+				!ta.hasAttribute("aria-describedby"),
+			);
+			ta.remove();
+
 			/* ---- the base layer: .vui-menuitem outside any container ----------- */
 			{
 				const loose = document.createElement("button");

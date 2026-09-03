@@ -12,22 +12,27 @@ any [`design-tokens`](https://jsr.io/@marianmeres/design-tokens) theme, light or
 
 Every component leans on the platform first (native `<dialog>`, the Popover API, `<details>`)
 and adds only chrome, keyboard/aria glue, and a small typed API. Underneath them all sits one
-small **base layer** (`components/base.css`) holding the token vocabulary and the control
-primitives — buttons, inputs, menu items, summaries, tabs, the focus ring — so nothing in the
-kit can drift apart. The
+small **base layer** (`components/base.css`) holding the token vocabulary, the control
+primitives — buttons, inputs, menu items, summaries, tabs, switches, the focus ring — and a
+little chrome (badge, alert, card, table), so nothing in the kit can drift apart. The
 rationale is in [`docs/DESIGN.md`](./docs/DESIGN.md).
 
 ## Components
 
-| Component      | File                                                         | Built on                             | Status |
-| -------------- | ------------------------------------------------------------ | ------------------------------------ | ------ |
-| dialog         | [`components/dialog.html`](./components/dialog.html)         | native `<dialog>`                    | ✅     |
-| popover / menu | [`components/popover.html`](./components/popover.html)       | Popover API + CSS Anchor Positioning | ✅     |
-| disclosure     | [`components/disclosure.html`](./components/disclosure.html) | native `<details>` / `<summary>`     | ✅     |
-| tabs           | [`components/tabs.html`](./components/tabs.html)             | ARIA tabs + `hidden="until-found"`   | ✅     |
-| toast          | [`components/toast.html`](./components/toast.html)           | Popover API (top layer) + timers     | ✅     |
+| Component                | File                                                         | Built on                             | Status |
+| ------------------------ | ------------------------------------------------------------ | ------------------------------------ | ------ |
+| dialog · drawer · sheet  | [`components/dialog.html`](./components/dialog.html)         | native `<dialog>`                    | ✅     |
+| popover · menu · tooltip | [`components/popover.html`](./components/popover.html)       | Popover API + CSS Anchor Positioning | ✅     |
+| disclosure               | [`components/disclosure.html`](./components/disclosure.html) | native `<details>` / `<summary>`     | ✅     |
+| tabs                     | [`components/tabs.html`](./components/tabs.html)             | ARIA tabs + `hidden="until-found"`   | ✅     |
+| toast                    | [`components/toast.html`](./components/toast.html)           | Popover API (top layer) + timers     | ✅     |
 
-Deferred: select / combobox — they would need keyed list rendering. See
+A drawer and a sheet are the dialog with a `placement` — `"start"` / `"end"` pins it to an edge
+full height, `"top"` / `"bottom"` full width — because the top layer, the focus trap, Esc and
+focus restore are already in the box. There is no drawer component.
+
+Deferred: select / combobox — the platform has no restylable element for them yet, and
+`base.css` already paints the native `<select>`. See
 [`docs/DESIGN.md` → Roadmap](./docs/DESIGN.md#5-roadmap).
 
 ## Install
@@ -122,6 +127,17 @@ createPopover({
 	onSelect: (value) => console.log("picked:", value), // "rename" | "delete"
 });
 </script>
+```
+
+`role: "tooltip"` is the other mode, on the same surface and the same placement: hover or
+keyboard-focus the anchor and it shows, and the anchor gets `aria-describedby` rather than
+`aria-expanded` — a tooltip is not a widget its anchor expands. It is `popover="hint"` where the
+platform has that (so a tip inside a menu does not close the menu) and `pointer-events: none`
+always, which is the design and not an optimisation: a tooltip the pointer can enter is a
+popover somebody mislabelled. Text goes in; nothing else can.
+
+```ts
+createPopover({ anchor: helpBtn, role: "tooltip", body: "Only the owner can do this." });
 ```
 
 Leave `role` off for a plain popover (a form, a hint, anything) and pick a `placement`
@@ -271,7 +287,11 @@ the third control, keyed on its role: `<button role="menuitem">` in a `.vui-menu
 either (`.vui-menuitem` is the same look outside a component; `--destructive` tints it). A
 `<summary>` is the fourth, keyed on the element — a row with a caret that turns with its
 `<details>` (`.vui-summary` outside a component). A tab is the fifth, keyed on `role="tab"`,
-with `.vui-tablist` for the strip it sits in. Building
+with `.vui-tablist` for the strip it sits in. A switch is the sixth, keyed on `role="switch"` —
+`<input type="checkbox" role="switch">` and the platform keeps everything that is not paint, so
+there is no JS and no `aria-checked` to sync. Checkboxes, radios and ranges are not drawn at
+all, only tinted (`accent-color`), which is the other half of why the input rule cannot
+`all: unset`. Building
 a footer in JS? `button("Delete", { variant: "destructive", onClick })` returns an element with
 those classes on it. A container adapts every control inside it — its own and yours — by
 re-declaring `--vui-control-bg` &c. on itself; no descendant selectors anywhere. A variant is
@@ -279,6 +299,15 @@ that same move one element down (which is why a `--success` button in a dialog f
 green), so inventing a sixth role is five custom properties on a class of your own. Sizes ride
 the same channel (`--vui-control-min-height`, `-py`, `-px`), so a dense toolbar can shrink its
 controls the same way.
+
+Not everything in the base layer is a control. A **badge**, an **alert**, a **card** and a
+**table** are chrome: nothing there hovers, focuses or presses, so none of it reads the control
+context — a badge in a dialog panel keeps its color while every button around it lifts. An
+alert is the toast's treatment standing still (a 12% wash of the role, the border tinted, the
+role at full strength on the icon alone), which is what lets it hold ordinary buttons. And a
+`.vui-field` marks an error on the field rather than the control: `[data-invalid]` for a
+server-side one, `:has(:user-invalid)` — the platform's own post-interaction state, not
+`:invalid` — for the rest.
 
 Everything the kit defines lives in the `vui.base` / `vui.components` **cascade layers**, so
 your own unlayered CSS overrides any of it without `!important` or a specificity fight. The

@@ -10,11 +10,20 @@
 	adds only the chrome (header / body / footer slots), the return-value
 	convention, and the events out.
 
+	A DRAWER IS THIS COMPONENT WITH A MARGIN. `placement` pins the box to an
+	edge and slides it in from there; everything else — the top layer, the
+	focus trap, Esc, focus restore, and `modal` choosing showModal() vs show()
+	— is already here and already the platform's. There is no separate drawer
+	component and there will not be one.
+
 	Props (all optional):
 	  title           string        heading text
 	  body            Slot          text | HTMLElement | view — the content
 	  footer          Slot          text | HTMLElement | view — usually buttons
 	  modal           boolean       true → showModal(), false → show()   [true]
+	  placement       string        "center" | "start" | "end" | "top" |
+	                                "bottom" — an edge placement is a drawer
+	                                / sheet, same component            [center]
 	  closeOnBackdrop boolean       click outside the panel closes         [true]
 	  closeButton     boolean       render the ✕ in the header             [true]
 	  onClose         (returnValue) callback up, once per close
@@ -93,6 +102,10 @@
 			/* reset the UA dialog box, then draw our own */
 			margin: auto;
 			padding: 0;
+			/* border-box, so a stated width IS the width: `min(32rem, …)` here,
+			   and exactly 100vw / 100dvh for an edge placement below, instead of
+			   two border pixels past it */
+			box-sizing: border-box;
 			border: 1px solid var(--_border);
 			border-radius: var(--_radius);
 			background: var(--_bg);
@@ -160,9 +173,84 @@
 			border-top: 1px solid var(--_border);
 		}
 
+		/* ── placement: the same dialog, pinned to an edge ─────────────────
+		   A drawer and a sheet are not another component. <dialog> has already
+		   given the top layer, the focus trap, Esc and focus restore, and
+		   `modal` already chooses showModal() vs show() — so what is left is
+		   which edge the box sits on and which way it arrives: margins, sizes
+		   and one keyframe.
+
+		   `position: fixed` on purpose. The UA sheet makes a MODAL dialog fixed
+		   and a non-modal one `absolute`, so without this a non-modal drawer
+		   would hang off its offset parent instead of the viewport — and a
+		   non-modal drawer (a side panel you can still work around) is half the
+		   reason the prop exists.
+
+		   Margins and radii are logical, and `--_slide` is flipped under
+		   :dir(rtl), so an inline-side drawer comes in from the correct edge in
+		   both directions. */
+		:scope[data-placement]:not([data-placement="center"]) {
+			position: fixed;
+			border-radius: 0;
+		}
+		:scope:is([data-placement="start"], [data-placement="end"]) {
+			margin-block: 0;
+			height: 100dvh;
+			max-height: 100dvh;
+			width: min(24rem, calc(100vw - 3rem));
+
+			& .vui-dialog__panel {
+				height: 100%;
+				max-height: 100dvh;
+			}
+		}
+		:scope[data-placement="start"] {
+			--_slide: -100% 0;
+			margin-inline: 0 auto;
+			border-start-end-radius: var(--_radius);
+			border-end-end-radius: var(--_radius);
+		}
+		:scope[data-placement="end"] {
+			--_slide: 100% 0;
+			margin-inline: auto 0;
+			border-start-start-radius: var(--_radius);
+			border-end-start-radius: var(--_radius);
+		}
+		:scope:is([data-placement="top"], [data-placement="bottom"]) {
+			margin-inline: 0;
+			width: 100vw;
+			max-width: 100vw;
+			max-height: 85dvh;
+
+			& .vui-dialog__panel {
+				max-height: 85dvh;
+			}
+		}
+		:scope[data-placement="top"] {
+			--_slide: 0 -100%;
+			margin-block: 0 auto;
+			border-end-start-radius: var(--_radius);
+			border-end-end-radius: var(--_radius);
+		}
+		:scope[data-placement="bottom"] {
+			--_slide: 0 100%;
+			margin-block: auto 0;
+			border-start-start-radius: var(--_radius);
+			border-start-end-radius: var(--_radius);
+		}
+		:scope:dir(rtl)[data-placement="start"] {
+			--_slide: 100% 0;
+		}
+		:scope:dir(rtl)[data-placement="end"] {
+			--_slide: -100% 0;
+		}
+
 		@media (prefers-reduced-motion: no-preference) {
 			:scope[open] {
 				animation: vui-dialog-in 0.16s ease-out;
+			}
+			:scope[open][data-placement]:not([data-placement="center"]) {
+				animation: vui-dialog-slide 0.2s ease-out;
 			}
 			:scope[open]::backdrop {
 				animation: vui-dialog-fade 0.16s ease-out;
@@ -179,6 +267,13 @@
 @keyframes vui-dialog-fade {
 	from {
 		opacity: 0;
+	}
+}
+/* the slide reads `--_slide` off the element, so one keyframe serves all four
+   edges — and the RTL flip above is a custom property, not a fifth keyframe */
+@keyframes vui-dialog-slide {
+	from {
+		translate: var(--_slide);
 	}
 }
 </style>
@@ -204,11 +299,15 @@ function fill(track, slot, content) {
 	else mount(track, slot, content);
 }
 
+/** Where the box sits. Anything else falls back to "center". */
+const PLACEMENTS = ["center", "start", "end", "top", "bottom"];
+
 export function createDialog({
 	title = "",
 	body,
 	footer,
 	modal = true,
+	placement = "center",
 	closeOnBackdrop = true,
 	closeButton = true,
 	onClose,
@@ -216,6 +315,9 @@ export function createDialog({
 	return createView((track) => {
 		const el = fromTemplate("tpl-vui-dialog");
 		const r = refs(el);
+		// always stamped, center included: the state is then visible in devtools,
+		// and the CSS keys off the value rather than off the attribute existing
+		el.dataset.placement = PLACEMENTS.includes(placement) ? placement : "center";
 		const isOpen = observable(false);
 		// destroy() removes the node; removal fires no native `close`, so settle
 		// the observable ourselves (no onClose — teardown is not a verdict).

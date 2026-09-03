@@ -395,14 +395,25 @@
 			);
 			const listCs = getComputedStyle(list);
 			check(
-				"strip: the rail",
-				listCs.borderBottomWidth === "1px",
-				listCs.borderBottomWidth,
+				"strip: the rail, drawn inside the strip and not as a border",
+				/inset/.test(listCs.boxShadow) && listCs.borderBottomWidth === "0px",
+				`${listCs.boxShadow} / ${listCs.borderBottomWidth}`,
 			);
 			check(
 				"strip: it scrolls rather than wraps",
 				listCs.overflowX === "auto",
 				listCs.overflowX,
+			);
+			// why the rail is drawn inside: `overflow-x: auto` scrolls the BLOCK
+			// axis too, so a tab reaching 1px below the strip to cover a border
+			// would be 1px to scroll — a scrollbar down the side of the strip, and
+			// an indicator you have to scroll to see all of
+			check(
+				"strip: nothing overflows the block axis, so no scrollbar down it",
+				list.scrollHeight === list.clientHeight &&
+					list.offsetWidth === list.clientWidth,
+				`scroll ${list.scrollHeight}/${list.clientHeight}, ` +
+					`width ${list.offsetWidth}/${list.clientWidth}`,
 			);
 
 			// button(label, { role: "tab" }) carries .vui-btn too — the role must win
@@ -420,8 +431,8 @@
 			);
 			check(
 				".vui-tablist is the same strip outside a component",
-				getComputedStyle(loose).borderBottomWidth === "1px",
-				getComputedStyle(loose).borderBottomWidth,
+				/inset/.test(getComputedStyle(loose).boxShadow),
+				getComputedStyle(loose).boxShadow,
 			);
 			loose.remove();
 

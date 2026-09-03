@@ -317,6 +317,212 @@
 						so the container hook reaches them. Tab through the row
 						to see the one focus ring.
 					</p>
+					<div class="vui-row">
+						<label class="vui-row" style="gap: 0.4rem">
+							<input type="checkbox" checked /> checkbox
+						</label>
+						<label class="vui-row" style="gap: 0.4rem">
+							<input type="radio" name="c-radio" checked /> radio
+						</label>
+						<label class="vui-row" style="gap: 0.4rem">
+							<input type="radio" name="c-radio" /> other
+						</label>
+						<label class="vui-row" style="gap: 0.4rem">
+							<input type="checkbox" role="switch" checked />
+							switch, on
+						</label>
+						<label class="vui-row" style="gap: 0.4rem">
+							<input type="checkbox" role="switch" /> off
+						</label>
+						<label class="vui-row" style="gap: 0.4rem">
+							<input type="checkbox" role="switch" disabled />
+							disabled
+						</label>
+						<input
+							type="range"
+							aria-label="range"
+							style="flex: 1 1 8rem"
+						/>
+					</div>
+					<p style="margin: 0; font-size: 0.925rem">
+						The checkbox, radio and range are the UA's own glyphs,
+						tinted with one <code>accent-color</code> — the kit
+						draws nothing. The switch is the sixth control, keyed on
+						<code>role="switch"</code>: the platform gives the
+						semantics, the Space key and the form value, and CSS
+						draws the track.
+					</p>
+					<div class="vui-row" style="align-items: flex-start">
+						<div
+							class="vui-field"
+							style="flex: 1 1 13rem; margin: 0"
+						>
+							<label for="c-help">with help text</label>
+							<input id="c-help" type="text" placeholder="Ada" />
+							<span class="vui-help">Muted, under the control.</span>
+						</div>
+						<div
+							class="vui-field"
+							data-invalid
+							style="flex: 1 1 13rem; margin: 0"
+						>
+							<label for="c-invalid">server-side error</label>
+							<input id="c-invalid" type="text" value="ada@" />
+							<span class="vui-help">No such address.</span>
+						</div>
+						<div
+							class="vui-field"
+							style="flex: 1 1 13rem; margin: 0"
+						>
+							<label for="c-user">:user-invalid</label>
+							<input
+								id="c-user"
+								type="email"
+								required
+								placeholder="type something wrong"
+							/>
+							<span class="vui-help">
+								Reddens only once you have interacted with it —
+								not on load.
+							</span>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- ================================================================ chrome -->
+			<section class="component" id="chrome">
+				<h2>chrome · components/base.css</h2>
+				<p>
+					Also the base layer, also not components — and not controls
+					either: nothing here hovers, focuses or presses, so none of
+					it reads the control channel. A badge in a dialog panel
+					stays the color it was told to be while every button around
+					it lifts. They are here for the reason the controls are
+					(markup a consumer writes, which a factory can never reach)
+					and they stop where that argument stops.
+				</p>
+				<div class="stack">
+					<div class="vui-row">
+						<span class="vui-badge">default</span>
+						<span class="vui-badge vui-badge--primary">primary</span>
+						<span class="vui-badge vui-badge--accent">accent</span>
+						<span class="vui-badge vui-badge--destructive">
+							destructive
+						</span>
+						<span class="vui-badge vui-badge--warning">warning</span>
+						<span class="vui-badge vui-badge--success">success</span>
+						<span class="vui-badge">
+							42 <span aria-hidden="true">·</span> with a glyph
+						</span>
+					</div>
+
+					<div class="vui-alert">
+						<span class="vui-alert__icon" aria-hidden="true">i</span>
+						<div class="vui-alert__body">
+							<div class="vui-alert__title">Plain</div>
+							No role: a surface, a border, nothing tinted.
+						</div>
+					</div>
+					<div class="vui-alert vui-alert--warning">
+						<span class="vui-alert__icon" aria-hidden="true">!</span>
+						<div class="vui-alert__body">
+							<div class="vui-alert__title">Warning</div>
+							A 12% wash of the role, the border tinted to match,
+							the role at full strength on the icon alone — the
+							toast's treatment, standing still. The box keeps one
+							control context, which is why this button is the
+							same button as everywhere else:
+							<div class="vui-row" style="margin-top: 0.5rem">
+								<button type="button" class="vui-btn">
+									Undo
+								</button>
+								<button
+									type="button"
+									class="vui-btn vui-btn--ghost"
+								>
+									Dismiss
+								</button>
+							</div>
+						</div>
+					</div>
+					<div class="vui-alert vui-alert--destructive">
+						<span class="vui-alert__icon" aria-hidden="true">✕</span>
+						<div class="vui-alert__body">
+							<div class="vui-alert__title">Destructive</div>
+							Text stays at surface contrast on every theme — no
+							white-on-amber to check.
+						</div>
+					</div>
+					<div class="vui-alert vui-alert--success">
+						<span class="vui-alert__icon" aria-hidden="true">✓</span>
+						<div class="vui-alert__body">Success, one line.</div>
+					</div>
+
+					<div class="vui-card">
+						<strong>A card</strong> — the container tier of the
+						structural tokens spelled out: the same surface, the
+						container radius, and the <em>resting</em> shadow (a
+						popover is an overlay, a dialog is a dialog).
+						<div class="vui-row" style="margin-top: 0.75rem">
+							<button type="button" class="vui-btn vui-btn--primary">
+								Act
+							</button>
+							<button type="button" class="vui-btn">Later</button>
+						</div>
+					</div>
+
+					<div style="max-height: 11rem; overflow: auto">
+						<table class="vui-table vui-table--zebra">
+							<thead>
+								<tr>
+									<th>Component</th>
+									<th>Built on</th>
+									<th class="vui-num">Lines</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td>dialog</td>
+									<td><code>&lt;dialog&gt;</code></td>
+									<td class="vui-num">1</td>
+								</tr>
+								<tr>
+									<td>popover</td>
+									<td>Popover API</td>
+									<td class="vui-num">22</td>
+								</tr>
+								<tr>
+									<td>disclosure</td>
+									<td><code>&lt;details&gt;</code></td>
+									<td class="vui-num">333</td>
+								</tr>
+								<tr>
+									<td>tabs</td>
+									<td>roving tabindex</td>
+									<td class="vui-num">4444</td>
+								</tr>
+								<tr>
+									<td>toast</td>
+									<td>top layer + timers</td>
+									<td class="vui-num">55555</td>
+								</tr>
+							</tbody>
+							<tfoot>
+								<tr>
+									<th>five</th>
+									<td>mostly platform</td>
+									<td class="vui-num">60355</td>
+								</tr>
+							</tfoot>
+						</table>
+					</div>
+					<p style="margin: 0; font-size: 0.925rem">
+						Scroll the table: the header sticks because an ancestor
+						scrolls, not because the kit measured anything. Figures
+						are tabular and <code>.vui-num</code> aligns them to the
+						end. Sorting is behavior and is not here.
+					</p>
 				</div>
 			</section>
 
@@ -445,12 +651,57 @@
 						long content (scrolls)
 					</button>
 				</div>
+				<p style="margin: 0 0 0.75rem; font-size: 0.925rem">
+					A <strong>drawer</strong> and a <strong>sheet</strong> are
+					this component with a margin: <code>placement</code> pins
+					the box to an edge and slides it in from there, and the top
+					layer, the focus trap, Esc and focus restore are the ones
+					already in the box. <code>start</code> / <code>end</code>
+					are logical, so they follow the document direction.
+				</p>
+				<div class="vui-row" style="margin-bottom: 1rem">
+					<button
+						type="button"
+						class="vui-btn"
+						data-on="click:drawerStart"
+					>
+						drawer · start
+					</button>
+					<button
+						type="button"
+						class="vui-btn"
+						data-on="click:drawerEnd"
+					>
+						drawer · end
+					</button>
+					<button
+						type="button"
+						class="vui-btn"
+						data-on="click:sheetTop"
+					>
+						sheet · top
+					</button>
+					<button
+						type="button"
+						class="vui-btn"
+						data-on="click:sheetBottom"
+					>
+						sheet · bottom
+					</button>
+					<button
+						type="button"
+						class="vui-btn"
+						data-on="click:sidePanel"
+					>
+						side panel (non-modal drawer)
+					</button>
+				</div>
 				<pre class="log" data-ref="log"></pre>
 			</section>
 
 			<!-- =============================================================== popover -->
 			<section class="component" id="popover">
-				<h2>popover · menu</h2>
+				<h2>popover · menu · tooltip</h2>
 				<p>
 					The native Popover API: top layer, light dismiss (click
 					outside, Esc), one auto popover at a time — and nesting.
@@ -488,6 +739,20 @@
 						inside a dialog
 					</button>
 				</div>
+				<p style="margin: 0 0 0.5rem; font-size: 0.925rem">
+					<code>role: "tooltip"</code> is the other mode — the same
+					surface and the same placement, triggered by hover and
+					keyboard focus instead of a click. Hover these, then Tab to
+					them: the anchor gets <code>aria-describedby</code> (never
+					<code>aria-expanded</code>), and the box is
+					<code>pointer-events: none</code>, so it is text and cannot
+					be anything else.
+				</p>
+				<div
+					class="vui-row"
+					data-ref="tooltips"
+					style="margin-bottom: 1rem"
+				></div>
 				<p style="margin: 0 0 0.5rem; font-size: 0.925rem">
 					Placement is the <em>preferred</em> side. Scroll so an
 					anchor nears an edge and watch it flip:
@@ -1035,6 +1300,42 @@
 							modal: false,
 						}),
 
+					drawerStart: () =>
+						show("drawer start", {
+							title: "Filters",
+							placement: "start",
+							body:
+								"Pinned to the inline start, full height, and it slides in from that edge. Everything else — Esc, the focus trap, focus restore — is the same dialog.",
+						}),
+					drawerEnd: () =>
+						show("drawer end", {
+							title: "Details",
+							placement: "end",
+							body:
+								"The same box on the other edge. `start` / `end` are logical, so RTL flips both the side and the slide.",
+						}),
+					sheetTop: () =>
+						show("sheet top", {
+							title: "Notifications",
+							placement: "top",
+							body:
+								"Full width, capped at 85dvh, square along the edge it is pinned to.",
+						}),
+					sheetBottom: () =>
+						show("sheet bottom", {
+							title: "Share",
+							placement: "bottom",
+							body: "The mobile sheet, with nothing mobile-specific about it.",
+						}),
+					sidePanel: () =>
+						show("side panel", {
+							title: "Side panel",
+							placement: "end",
+							modal: false,
+							body:
+								"Non-modal: no backdrop, no focus trap, the page stays interactive — and it still pins to the viewport, because an edge placement declares `position: fixed` rather than inheriting the UA's `absolute` for a non-modal dialog.",
+						}),
+
 					long: () => {
 						const node = fromTemplate("tpl-gallery-long");
 						refs(node).p.textContent = "Lorem ipsum dolor sit amet. ".repeat(160);
@@ -1124,6 +1425,26 @@
 				const anchor = button(placement, { variant: "ghost" });
 				r.placements.append(anchor);
 				pop(placement, { anchor, body: placement, placement });
+			}
+
+			// tooltips: hover or Tab to them. No log line — a tooltip that
+			// announced itself would be a popover with extra steps.
+			for (
+				const [label, body, placement, delay] of [
+					["hover me", "The default: above, after 120ms.", undefined, undefined],
+					["below", 'placement: "bottom"', "bottom", undefined],
+					["at once", "delay: 0 — no wait at all.", "right", 0],
+					[
+						"a long one",
+						"A tooltip wraps at 20rem and stays text: pointer-events: none means there is nowhere to put a button, which is the point.",
+						"top",
+						undefined,
+					],
+				]
+			) {
+				const anchor = button(label, { variant: "ghost" });
+				r.tooltips.append(anchor);
+				ui.createPopover({ anchor, role: "tooltip", body, placement, delay });
 			}
 
 			// a menu inside a modal dialog: both in the top layer, the

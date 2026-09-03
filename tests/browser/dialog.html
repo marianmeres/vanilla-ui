@@ -308,6 +308,74 @@
 			check("modal:false uses show()", nonModal.el.open && !nonModal.el.matches(":modal"));
 			nonModal.destroy();
 
+			/* ---- placement: a drawer is this dialog with a margin ------------- */
+			// the entry animation slides the box in from its edge, so geometry is
+			// only the final geometry once it is off — unlayered + !important, the
+			// same escape hatch a consumer has
+			const noAnim = document.createElement("style");
+			noAnim.textContent = ".vui-dialog { animation: none !important; }";
+			document.head.append(noAnim);
+			const near = (a, b) => Math.abs(a - b) <= 1;
+
+			const centered = createDialog({ title: "c" });
+			document.body.append(centered.el);
+			check("placement defaults to center", centered.el.dataset.placement === "center");
+			centered.destroy();
+
+			const bogus = createDialog({ title: "b", placement: "sideways" });
+			check(
+				"an unknown placement falls back to center",
+				bogus.el.dataset.placement === "center",
+			);
+			bogus.destroy();
+
+			for (
+				const [placement, edge] of [
+					["start", (r) => near(r.left, 0)],
+					["end", (r) => near(r.right, innerWidth)],
+					["top", (r) => near(r.top, 0)],
+					["bottom", (r) => near(r.bottom, innerHeight)],
+				]
+			) {
+				const d = createDialog({ title: placement, placement });
+				document.body.append(d.el);
+				d.open();
+				const r = d.el.getBoundingClientRect();
+				check(`placement:${placement} is stamped`, d.el.dataset.placement === placement);
+				check(
+					`placement:${placement} is fixed`,
+					getComputedStyle(d.el).position === "fixed",
+				);
+				check(`placement:${placement} sits on its edge`, edge(r), JSON.stringify(r));
+				check(
+					`placement:${placement} fills the cross axis`,
+					placement === "start" || placement === "end"
+						? near(r.height, innerHeight)
+						: near(r.width, innerWidth),
+					`${r.width}x${r.height} vs ${innerWidth}x${innerHeight}`,
+				);
+				d.destroy();
+			}
+
+			// the reason `position: fixed` is declared rather than inherited from the
+			// UA: a NON-MODAL <dialog> is `absolute` per the UA sheet, so a drawer
+			// opened with show() would otherwise hang off its offset parent
+			const offsetParent = document.createElement("div");
+			offsetParent.style.cssText = "position: relative; margin-left: 40px; width: 100px";
+			document.body.append(offsetParent);
+			const sidePanel = createDialog({ title: "sp", modal: false, placement: "end" });
+			offsetParent.append(sidePanel.el);
+			sidePanel.open();
+			check(
+				"a non-modal drawer pins to the viewport, not its offset parent",
+				near(sidePanel.el.getBoundingClientRect().right, innerWidth),
+				JSON.stringify(sidePanel.el.getBoundingClientRect()),
+			);
+			check("…and is still non-modal", !sidePanel.el.matches(":modal"));
+			sidePanel.destroy();
+			offsetParent.remove();
+			noAnim.remove();
+
 			/* ---- element + view slots, nesting, destroy cascade -------------- */
 			const node = document.createElement("p");
 			node.textContent = "E";

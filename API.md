@@ -340,14 +340,21 @@ consistent without a rule per variant. Your own role works the same way, no kit 
 | `.vui-btn--ghost`                                                              | no fill; borrows its container's foreground on hover             |
 | `.vui-btn--icon`                                                               | square + round, for a single glyph                               |
 | `.vui-input` / `.vui-select`                                                   | text inputs, selects, textareas                                  |
+| `.vui-check`                                                                   | a checkbox / radio / range, tinted (`accent-color`), not redrawn |
+| `.vui-switch`                                                                  | a switch (what `role="switch"` gets inside a component)          |
 | `.vui-menuitem`                                                                | a menu item (what `role="menuitem"` gets inside a component)     |
 | `.vui-summary`                                                                 | a disclosure header (what a `<summary>` gets inside a component) |
 | `.vui-tab`                                                                     | a tab (what `role="tab"` gets inside a component)                |
 | `.vui-tablist`                                                                 | the strip a tab sits in — its rail, and its scroll               |
 | `.vui-menuitem--destructive`                                                   | colored text and a tinted hover — never a filled row             |
 | `.vui-field`                                                                   | a stacked `<label>` + full-width control                         |
+| `.vui-help`                                                                    | muted help text under a `.vui-field`'s control                   |
 | `.vui-row`                                                                     | a wrapping flex row at `--vui-gap` (button rows, toolbars)       |
 | `.vui-menu`                                                                    | a vertical list of items, with `<hr>` separators                 |
+| `.vui-badge` (+ the five roles)                                                | a small filled label — not a control, no states                  |
+| `.vui-alert` (+ the five roles)                                                | a tinted callout: `__icon`, `__body`, `__title`                  |
+| `.vui-card`                                                                    | the container tier: surface, container radius, resting shadow    |
+| `.vui-table` (+ `--zebra`, `.vui-num`)                                         | rules, a muted header that sticks, tabular figures               |
 
 **Menu items** are the third control, keyed on the ARIA role the menu popover needs anyway:
 inside any vui container, `[role="menuitem"]` (also `menuitemcheckbox` / `menuitemradio`) is
@@ -368,19 +375,93 @@ clips itself to its radius). `.vui-summary` is the same look outside a container
 **Tabs** are the fifth control, keyed on the role again: inside any vui container a
 `[role="tab"]` is painted as a tab — muted at rest, hover and foreground from the
 [control context](#control-context), and a 2px indicator that is transparent until
-`aria-selected="true"` and is pulled down **over** the strip's rail so the two read as one
-line. `:is()` at (0,1,0) and written after `.vui-btn`, so `button("Overview", { role: "tab" })`
+`aria-selected="true"` and sits **on** the strip's rail, covering it, so the two read as one
+line. The strip draws that rail **inside** itself (an inset shadow along the bottom of its
+padding box, not a border below it) because it scrolls: `overflow-x: auto` scrolls the block
+axis too, so a tab reaching a pixel past the strip to cover a border is a pixel of scrollable
+overflow — enough for a scrollbar down the side of the strip and a clipped indicator. `:is()` at (0,1,0) and written after `.vui-btn`, so `button("Overview", { role: "tab" })`
 comes out a tab. The strip is `.vui-tablist` / `[role="tablist"]`, and ships in the same block
 because it draws the rail the indicator sits on; it **scrolls** rather than wraps (hence the
 focus ring drawn inside), and `aria-orientation="vertical"` turns the whole thing on its side —
 rail and indicator move to the inline edge. `components/tabs.html` gives its tabs no class at
 all; `.vui-tab` / `.vui-tablist` are for a strip you write yourself, a nav of `<a>`s included.
 
+**Switches** are the sixth control, and the third keyed on a role: inside any vui container an
+`<input type="checkbox" role="switch">` is drawn as a track and a knob. The platform keeps
+everything that is not paint — the semantics, the Space key, `:checked`, `disabled`, the form
+value — so there is no factory, no JS and no `aria-checked` to keep in sync; flip it in code
+with `el.checked = true` like any checkbox. The knob moves with `inset-inline-start`, so an RTL
+switch flips itself. `.vui-switch` is the same look outside a container.
+
+**Checkboxes, radios and ranges are tinted, not drawn.** One `accent-color: var(--vui-primary)`
+puts the UA's own glyph on the theme — it is already correct in both color schemes, and nothing
+the kit could draw would be better. This is why the input rule above does not `all: unset`: the
+glyph it would take with it is the thing being tinted. `.vui-check` is the same tint outside a
+container.
+
+### Chrome: badge, alert, card, table
+
+Also the base layer, and also not components — but not controls either. Nothing here hovers,
+focuses or presses, so **none of it reads the [control context](#control-context)**: a badge in
+a dialog panel stays the color it was told to be while every button around it lifts to
+`surface-1`.
+
+```html
+<span class="vui-badge vui-badge--success">shipped</span>
+
+<div class="vui-alert vui-alert--warning">
+	<span class="vui-alert__icon" aria-hidden="true">!</span>
+	<div class="vui-alert__body">
+		<div class="vui-alert__title">Heads up</div>
+		Anything, including buttons — they are the same buttons as anywhere else.
+	</div>
+</div>
+
+<div class="vui-card">…</div>
+
+<div style="max-block-size: 20rem; overflow: auto">
+	<table class="vui-table vui-table--zebra">
+		<thead>…</thead>
+		<tbody>…<td class="vui-num">42</td>…</tbody>
+	</table>
+</div>
+```
+
+- **`.vui-alert`** is the toast's treatment standing still (see [`createToast`](#createtoast)):
+  a surface with a 12% wash of the role, the border tinted to match, the role at full strength
+  on `__icon` alone. It stays a tint rather than a fill for the toast's reason — a tinted box
+  keeps **one** control context, so a `.vui-btn` or a ghost ✕ inside it needs no per-role
+  handling, and the text keeps surface contrast on every theme.
+- **`.vui-table`**'s header sticks only if an ancestor scrolls — wrap it in an `overflow: auto`
+  box and it works; on the page it is inert. `.vui-num` right-aligns a numeric column, and the
+  whole table is `tabular-nums`. Sorting is behavior, so it is not here.
+- **Zebra stripes and the switch's off-track** are mixed off `--vui-foreground`, not
+  `--vui-muted`: a theme is free to put muted a hair off its own surface, and a stripe that some
+  themes flatten to nothing is worse than no stripe.
+
+### Field states
+
+`.vui-field` marks an error on the **field**, never on the control, so a component can set it
+without painting anything:
+
+```html
+<div class="vui-field" data-invalid>
+	<label for="email">Email</label>
+	<input id="email" type="email" />
+	<span class="vui-help">No such address.</span>
+</div>
+```
+
+`[data-invalid]` is for an error the browser knows nothing about (a server said so). The other
+half is the platform's: `.vui-field:has(:user-invalid)` reddens on its own — `:user-invalid`,
+not `:invalid`, so an untouched form does not open in red.
+
 ### Bare markup inside a component
 
 Any element carrying a `vui-` class is a **container hook**: bare `<button>`, `<input>`,
-`<select>`, `<textarea>`, `<summary>`, `[role="menuitem"]` and `[role="tab"]` descendants get
-the control look with no classes at all. So a `<form method="dialog">` dropped into a dialog body is styled, and takes
+`<select>`, `<textarea>`, `<summary>`, `[role="menuitem"]`, `[role="tab"]` and
+`[role="switch"]` descendants get the control look with no classes at all (and a bare checkbox,
+radio or range gets the theme's `accent-color`). So a `<form method="dialog">` dropped into a dialog body is styled, and takes
 that dialog's control context, without knowing the kit exists:
 
 ```html
@@ -411,15 +492,16 @@ header / body / footer chrome, a `returnValue` convention, and events out.
 
 **Parameters:** `props` (`DialogProps`, optional)
 
-| Prop              | Type                            | Default | Description                                                                  |
-| ----------------- | ------------------------------- | ------- | ---------------------------------------------------------------------------- |
-| `title`           | `string`                        | `""`    | Heading text. Empty → no heading (header hidden if `closeButton` is off too) |
-| `body`            | `Slot`                          | —       | Content: text, an element, or a view (mounted + destroyed with the dialog)   |
-| `footer`          | `Slot`                          | —       | Footer content (typically buttons). Absent → footer hidden                   |
-| `modal`           | `boolean`                       | `true`  | `showModal()` vs `show()`                                                    |
-| `closeOnBackdrop` | `boolean`                       | `true`  | Backdrop click closes (modal only)                                           |
-| `closeButton`     | `boolean`                       | `true`  | Render the ✕ in the header                                                   |
-| `onClose`         | `(returnValue: string) => void` | —       | Callback up, once per close                                                  |
+| Prop              | Type                            | Default    | Description                                                                  |
+| ----------------- | ------------------------------- | ---------- | ---------------------------------------------------------------------------- |
+| `title`           | `string`                        | `""`       | Heading text. Empty → no heading (header hidden if `closeButton` is off too) |
+| `body`            | `Slot`                          | —          | Content: text, an element, or a view (mounted + destroyed with the dialog)   |
+| `footer`          | `Slot`                          | —          | Footer content (typically buttons). Absent → footer hidden                   |
+| `modal`           | `boolean`                       | `true`     | `showModal()` vs `show()`                                                    |
+| `placement`       | `DialogPlacement`               | `"center"` | `"start"` / `"end"` → a drawer, `"top"` / `"bottom"` → a sheet               |
+| `closeOnBackdrop` | `boolean`                       | `true`     | Backdrop click closes (modal only)                                           |
+| `closeButton`     | `boolean`                       | `true`     | Render the ✕ in the header                                                   |
+| `onClose`         | `(returnValue: string) => void` | —          | Callback up, once per close                                                  |
 
 **Returns:** `DialogView`
 
@@ -479,6 +561,29 @@ dlg.el.addEventListener("vui:close", (e) => console.log(e.detail.returnValue));
 A `<form method="dialog">` inside `body` closes the dialog natively; give each submit button a
 `value` and it arrives as the `returnValue`.
 
+**Drawers and sheets are this component with a margin.** `placement` pins the box to an edge and
+slides it in from there; everything that makes a drawer hard — the top layer, the focus trap,
+Esc, focus restore, and `modal` choosing between `showModal()` and `show()` — is already in the
+box, so there is no drawer component to learn:
+
+```ts
+createDialog({ title: "Filters", placement: "start" }); // a drawer
+createDialog({ title: "Share", placement: "bottom" }); // a sheet
+createDialog({ title: "Details", placement: "end", modal: false }); // a side panel
+```
+
+| `placement`          | Where                                        |
+| -------------------- | -------------------------------------------- |
+| `"center"` (default) | centered, `min(32rem, 100vw - 2rem)` wide    |
+| `"start"` / `"end"`  | full height, `min(24rem, 100vw - 3rem)` wide |
+| `"top"` / `"bottom"` | full width, up to `85dvh` tall               |
+
+`start` and `end` are **logical**: the inline-start edge in LTR, the inline-end edge in RTL, and
+the slide flips with them. An edge placement declares `position: fixed`, so a **non-modal**
+drawer still pins to the viewport — the UA stylesheet makes a non-modal `<dialog>` `absolute`,
+which would otherwise hang it off the nearest positioned ancestor. Corners stay rounded on the
+side away from the edge only.
+
 ---
 
 ### `createPopover(props)` — `components/popover.html`
@@ -489,7 +594,8 @@ click-outside and Esc to dismiss, one auto popover at a time with nesting, focus
 and knows not to light-dismiss on it. Placement is CSS Anchor Positioning (flipping at the
 viewport edge via `position-try-fallbacks`) where the browser has it, and a small JS
 measure / flip / clamp — re-run on scroll and resize while open — where it does not. With
-`role: "menu"` it is a menu. Rationale: [`docs/DESIGN.md` §D10](./docs/DESIGN.md).
+`role: "menu"` it is a menu; with `role: "tooltip"` it is a tooltip. Rationale:
+[`docs/DESIGN.md` §D10](./docs/DESIGN.md).
 
 **Parameters:** `props` (`PopoverProps`) — only `anchor` is required
 
@@ -499,8 +605,9 @@ measure / flip / clamp — re-run on scroll and resize while open — where it d
 | `body`          | `Slot`                                       | —                | Content: text, an element, or a view. For a menu: the items                                                                                                                            |
 | `placement`     | `PopoverPlacement`                           | `"bottom-start"` | The **preferred** side; it flips when it would overflow. `start`/`end` align the popover's inline edge with the anchor's, the bare side centers it                                     |
 | `offset`        | `number`                                     | `4`              | Gap from the anchor, px                                                                                                                                                                |
-| `role`          | `string`                                     | —                | The root's ARIA role, set as given. `"menu"` **also** switches on the menu behavior (below)                                                                                            |
-| `trigger`       | `boolean`                                    | `true`           | Clicking the anchor toggles                                                                                                                                                            |
+| `role`          | `string`                                     | —                | The root's ARIA role, set as given. `"menu"` and `"tooltip"` **also** switch on the behavior below                                                                                     |
+| `trigger`       | `boolean`                                    | `true`           | Wires the anchor: click toggles, or — tooltip — hover and keyboard focus show                                                                                                          |
+| `delay`         | `number`                                     | `120`            | Tooltip: ms a hover must last before it shows. Keyboard focus never waits                                                                                                              |
 | `closeOnSelect` | `boolean`                                    | `true`           | Menu: activating an item closes                                                                                                                                                        |
 | `onOpen`        | `() => void`                                 | —                | After the native `toggle` reports it open                                                                                                                                              |
 | `onClose`       | `() => void`                                 | —                | After the native `toggle` reports it closed — whatever closed it                                                                                                                       |
@@ -526,6 +633,32 @@ measure / flip / clamp — re-run on scroll and resize while open — where it d
 `vui:select` with the item's `value` attribute (else `data-value`, else its text) and, by default,
 closes. Items that are `disabled`, `aria-disabled="true"` or hidden are skipped. Items inside a
 nested `data-scope` belong to that component, not to the menu.
+
+**Tooltip** (`role: "tooltip"`): hover or keyboard-focus the anchor and the box appears; leave,
+blur, click or press Esc and it goes.
+
+```ts
+createPopover({ anchor: helpBtn, role: "tooltip", body: "Only the owner can do this." });
+```
+
+Four things differ from every other mode, and each is the point:
+
+- **The anchor is described, not expanded.** It gets `aria-describedby` and neither
+  `aria-expanded` nor `aria-controls` — a tooltip is not a widget its anchor expands, and saying
+  so would be a lie a screen reader repeats.
+- **No invoker, no click.** The native invoker relationship is a _toggle_, which is not what a
+  tooltip does, so the anchor gets hover and focus listeners instead. Only `:focus-visible`
+  counts, so clicking a `<button>` (which Chrome focuses and Safari does not) never leaves a tip
+  hanging behind it.
+- **`popover="hint"` where the platform has it**, `"manual"` where it does not — never `"auto"`,
+  which would close whatever menu is already open. A hint light-dismisses and takes Esc without
+  closing an auto popover, so a tip inside a menu leaves the menu alone.
+- **`pointer-events: none`.** A tooltip the pointer can enter is a popover somebody mislabelled.
+  Making it physically unreachable is what keeps `aria-describedby` honest: text goes in, and
+  nothing else can.
+
+Default `placement` is `"top"` for a tooltip (`"bottom-start"` otherwise); `delay` applies to
+hover only.
 
 **Events** (dispatched on `el`, bubbling):
 
@@ -914,11 +1047,22 @@ interface DialogProps {
 	body?: Slot;
 	footer?: Slot;
 	modal?: boolean; // default true
+	placement?: DialogPlacement; // default "center"
 	closeOnBackdrop?: boolean; // default true
 	closeButton?: boolean; // default true
 	onClose?: (returnValue: string) => void;
 }
 ```
+
+### `DialogPlacement`
+
+```ts
+type DialogPlacement = "center" | "start" | "end" | "top" | "bottom";
+```
+
+An edge value makes the dialog a drawer (`start` / `end`) or a sheet (`top` / `bottom`) — the
+same component, pinned and slid in from that edge. Logical, so `start` follows the document
+direction. An unknown value falls back to `"center"`.
 
 ### `DialogView`
 
@@ -959,8 +1103,9 @@ interface PopoverProps {
 	body?: Slot;
 	placement?: PopoverPlacement; // default "bottom-start"
 	offset?: number; // px, default 4
-	role?: "menu" | "dialog" | "listbox" | (string & {}); // "menu" switches the menu behavior on
+	role?: "menu" | "tooltip" | "dialog" | "listbox" | (string & {}); // "menu" / "tooltip" switch their behavior on
 	trigger?: boolean; // default true
+	delay?: number; // tooltip; default 120
 	closeOnSelect?: boolean; // menu; default true
 	onOpen?: () => void;
 	onClose?: () => void;

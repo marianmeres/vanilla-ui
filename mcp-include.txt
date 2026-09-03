@@ -8,21 +8,34 @@ vocabulary named token-minus-"color-" (--vui-surface-foreground) with system-col
 adds structural tokens in stuic's tiers (radius element/button/container, shadow
 resting/overlay/dialog, border-width, transition), and defines the control primitives — .vui-btn
 with the five design-tokens semantic roles (primary, accent, destructive, warning, success,
-each with hover/active/foreground) plus --ghost and --icon, .vui-input, .vui-field, .vui-row,
-the focus ring — which also apply to bare <button> and <input> markup inside any component, so
-slot content looks right with no classes. Buttons are styles, not components (button() builds
+each with hover/active/foreground) plus --ghost and --icon, .vui-input, .vui-switch (keyed on
+role="switch" over a checkbox — the platform keeps everything that is not paint), .vui-field
+(with .vui-help and an error state on the FIELD: [data-invalid], or :has(:user-invalid)),
+.vui-row, the focus ring — which also apply to bare <button> and <input> markup inside any
+component, so slot content looks right with no classes; checkboxes, radios and ranges are
+tinted with accent-color rather than redrawn, which is why the input rule does not all:unset.
+Base also ships a little non-control chrome that reads no control context at all: .vui-badge,
+.vui-alert (the toast's tint treatment standing still, so it can hold ordinary buttons),
+.vui-card and .vui-table (rules, a sticky header if an ancestor scrolls, .vui-num, --zebra). Buttons are styles, not components (button() builds
 one as a plain element). Everything is in the vui.base / vui.components cascade layers, so
 unlayered consumer CSS overrides it for free. Containers AND variants both work by re-declaring
 the --vui-control-* channel (colors and sizes) on themselves, so a new role is five custom
 properties and no new rule; the channel's defaults are var() fallbacks at the usage sites, never
 :root declarations, so they resolve at the control. The
 typed index (src/mod.ts) re-exports vanilla, resolves URLs from its own location, and exposes
-loadAll()/load<Name>()/loadStyles(). Primitives so far: dialog on the native <dialog>; popover on
+loadAll()/load<Name>()/loadStyles(). Primitives so far: dialog on the native <dialog> (its
+`placement` prop — start/end/top/bottom, logical — makes the SAME component a drawer or a
+sheet, since <dialog> already gives the top layer, focus trap, Esc and focus restore; an edge
+placement declares position:fixed so a non-modal drawer still pins to the viewport); popover on
 the native Popover API (popover="auto": top layer, light dismiss, nesting; a <button> anchor is
 the native invoker), placed by CSS Anchor Positioning with position-try flips and by a small JS
 measure/flip/clamp where a browser lacks it, and with role "menu" a menu (focus on open,
 arrow/Home/End keys, Tab closes, vui:select with the item's value) whose items base.css paints by
-their role alone (.vui-menu, .vui-menuitem, --destructive); and disclosure on the native
+their role alone (.vui-menu, .vui-menuitem, --destructive), and with role "tooltip" a tooltip on
+that same surface and placement (hover + :focus-visible instead of a click, a `delay` for the
+hover only, aria-describedby on the anchor rather than aria-expanded, popover="hint" where the
+platform has it so it does not close an open menu, and pointer-events:none — text only, by
+construction); and disclosure on the native
 <details>/<summary> — a box, an isOpen observable and vui:open/vui:close over a platform that
 already has the toggle, the keyboard, aria-expanded and find-in-page, with `name` giving a
 natively exclusive accordion (no group component, no registry) and ::details-content the height

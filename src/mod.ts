@@ -224,6 +224,13 @@ export interface DialogProps {
 	footer?: Slot;
 	/** `true` → `showModal()` (backdrop, focus trap, Esc); `false` → `show()`. Default `true`. */
 	modal?: boolean;
+	/**
+	 * Which edge the box sits on — see {@link DialogPlacement}. An edge
+	 * placement makes it a drawer or a sheet and is `position: fixed` either
+	 * way, so a non-modal one still pins to the viewport rather than to its
+	 * offset parent. Default `"center"`.
+	 */
+	placement?: DialogPlacement;
 	/** Close when the backdrop is clicked (modal only). Default `true`. */
 	closeOnBackdrop?: boolean;
 	/** Render the ✕ button in the header. Default `true`. */
@@ -235,6 +242,14 @@ export interface DialogProps {
 	 */
 	onClose?: (returnValue: string) => void;
 }
+
+/**
+ * Where a dialog sits. An edge placement is a drawer (`start` / `end`) or a
+ * sheet (`top` / `bottom`) — the same component, pinned and slid in from that
+ * edge, because `<dialog>` already gives the top layer, the focus trap, Esc and
+ * focus restore. Logical: `start` is the left edge in LTR, the right in RTL.
+ */
+export type DialogPlacement = "center" | "start" | "end" | "top" | "bottom";
 
 /** The view returned by {@link CreateDialog}. */
 export interface DialogView extends ViewInstance {
@@ -284,12 +299,12 @@ export interface PopoverProps {
 	 * **invoker** (the browser toggles it on click and keyboard, and knows not to
 	 * light-dismiss on it). Any other element gets a click listener. It receives
 	 * `aria-expanded`, `aria-controls` and, for a `role` that warrants it,
-	 * `aria-haspopup`.
+	 * `aria-haspopup` — or, for `role: "tooltip"`, `aria-describedby` alone.
 	 */
 	anchor: HTMLElement;
 	/** Content — see {@link Slot}. For a menu: the items (see `role`). */
 	body?: Slot;
-	/** Preferred side. Default `"bottom-start"`. */
+	/** Preferred side. Default `"bottom-start"` — or `"top"` for a tooltip. */
 	placement?: PopoverPlacement;
 	/** Gap from the anchor, in px. Default `4`. */
 	offset?: number;
@@ -298,10 +313,24 @@ export interface PopoverProps {
 	 * behavior: the body's `[role="menuitem"]` elements (any of the three menuitem
 	 * roles) get focus on open, ↑ ↓ Home End navigation, hover-to-focus, Tab-to-close,
 	 * and activating one fires `onSelect` / `vui:select` and (by default) closes.
+	 *
+	 * `"tooltip"` switches on the tooltip behavior: hover or keyboard-focus the
+	 * anchor to show it, the anchor gets `aria-describedby` instead of
+	 * `aria-expanded`, the box is `popover="hint"` (falling back to `"manual"`),
+	 * and it is `pointer-events: none` — text only, never controls.
 	 */
-	role?: "menu" | "dialog" | "listbox" | (string & {});
-	/** Clicking the anchor toggles. Default `true`. */
+	role?: "menu" | "tooltip" | "dialog" | "listbox" | (string & {});
+	/**
+	 * Wire the anchor: click toggles, or — for `role: "tooltip"` — hover and
+	 * keyboard focus show. `false` leaves the anchor alone and you drive
+	 * `open()` / `close()`. Default `true`.
+	 */
 	trigger?: boolean;
+	/**
+	 * Tooltip only: how long a hover must last before it shows, in ms. Keyboard
+	 * focus never waits. Default `120`.
+	 */
+	delay?: number;
 	/** Menu only: activating an item closes the popover. Default `true`. */
 	closeOnSelect?: boolean;
 	/** Called after the native `toggle` event reports it open. */
