@@ -16,8 +16,9 @@
  *      this module's own URL, so the kit works from wherever it is served (a sibling
  *      folder, a vendored copy, a CDN) with no configuration.
  *   3. **Loads them with types** — {@link loadAll} / {@link loadDialog} /
- *      {@link loadPopover} return the factories typed by the interfaces declared
- *      here (the `.html` files are plain JS; the types live in this file).
+ *      {@link loadPopover} / {@link loadDisclosure} return the factories typed by the
+ *      interfaces declared here (the `.html` files are plain JS; the types live in
+ *      this file).
  *   4. **Installs the base style layer** ({@link loadStyles}, called by every loader)
  *      — `components/base.css`: the design-token vocabulary every component reads
  *      and the kit's control primitives (`.vui-btn`, `.vui-input`). Buttons are
@@ -347,12 +348,63 @@ export async function loadPopover(
 }
 
 /* ============================================================================
+ * disclosure — components/disclosure.html
+ * ========================================================================== */
+
+/** Props of {@link CreateDisclosure}. All optional. */
+export interface DisclosureProps {
+	/** The header — see {@link Slot}. Rendered inside the native `<summary>`. */
+	summary?: Slot;
+	/** The panel — see {@link Slot}. */
+	body?: Slot;
+	/** Start expanded. Default `false`. */
+	open?: boolean;
+	/**
+	 * The native **exclusive group**: give several disclosures the same `name` and
+	 * the browser keeps at most one open — an accordion with no group component.
+	 * Each one still settles its own state from its own `toggle`.
+	 */
+	name?: string;
+	/** Called after the native `toggle` reports it open. */
+	onOpen?: () => void;
+	/** Called after the native `toggle` reports it closed — whatever closed it. */
+	onClose?: () => void;
+}
+
+/** The view returned by {@link CreateDisclosure}. */
+export interface DisclosureView extends ViewInstance {
+	/** The native `<details>` root (`data-scope="disclosure"`). */
+	el: HTMLDetailsElement;
+	/** `true` while expanded. Settled synchronously by `open()`/`close()` and by the native `toggle` for every other route (the summary, find-in-page, an exclusive sibling). */
+	isOpen: ReadonlyObservable<boolean>;
+	/** Expand it. No-op if already open. */
+	open(): void;
+	/** Collapse it. No-op if already closed. */
+	close(): void;
+	/** One or the other. */
+	toggle(): void;
+}
+
+/** The disclosure factory exported by `components/disclosure.html`. */
+export type CreateDisclosure = (props?: DisclosureProps) => DisclosureView;
+
+/** Load `components/disclosure.html` and return its typed factory. Idempotent per URL. */
+export async function loadDisclosure(
+	base: string = COMPONENTS_BASE,
+): Promise<CreateDisclosure> {
+	await loadStyles(base);
+	const mod = await loadComponent(componentUrl("disclosure", base));
+	return mod.createDisclosure as CreateDisclosure;
+}
+
+/* ============================================================================
  * All of it
  * ========================================================================== */
 
 /** Every factory the kit ships, typed. What {@link loadAll} resolves to. */
 export interface VanillaUi {
 	createDialog: CreateDialog;
+	createDisclosure: CreateDisclosure;
 	createPopover: CreatePopover;
 }
 
@@ -366,9 +418,10 @@ export async function loadAll(base: string = COMPONENTS_BASE): Promise<VanillaUi
 	// first, and awaited: it declares the cascade layer ORDER the components' own
 	// `@layer vui.components` blocks slot into
 	await loadStyles(base);
-	const [createDialog, createPopover] = await Promise.all([
+	const [createDialog, createDisclosure, createPopover] = await Promise.all([
 		loadDialog(base),
+		loadDisclosure(base),
 		loadPopover(base),
 	]);
-	return { createDialog, createPopover };
+	return { createDialog, createDisclosure, createPopover };
 }

@@ -13,17 +13,19 @@ any [`design-tokens`](https://jsr.io/@marianmeres/design-tokens) theme, light or
 Every component leans on the platform first (native `<dialog>`, the Popover API, `<details>`)
 and adds only chrome, keyboard/aria glue, and a small typed API. Underneath them all sits one
 small **base layer** (`components/base.css`) holding the token vocabulary and the control
-primitives — buttons, inputs, the focus ring — so nothing in the kit can drift apart. The
+primitives — buttons, inputs, menu items, summaries, the focus ring — so nothing in the kit can
+drift apart. The
 rationale is in [`docs/DESIGN.md`](./docs/DESIGN.md).
 
 ## Components
 
-| Component      | File                                                   | Built on                             | Status |
-| -------------- | ------------------------------------------------------ | ------------------------------------ | ------ |
-| dialog         | [`components/dialog.html`](./components/dialog.html)   | native `<dialog>`                    | ✅     |
-| popover / menu | [`components/popover.html`](./components/popover.html) | Popover API + CSS Anchor Positioning | ✅     |
+| Component      | File                                                         | Built on                             | Status |
+| -------------- | ------------------------------------------------------------ | ------------------------------------ | ------ |
+| dialog         | [`components/dialog.html`](./components/dialog.html)         | native `<dialog>`                    | ✅     |
+| popover / menu | [`components/popover.html`](./components/popover.html)       | Popover API + CSS Anchor Positioning | ✅     |
+| disclosure     | [`components/disclosure.html`](./components/disclosure.html) | native `<details>` / `<summary>`     | ✅     |
 
-Planned, in this order: disclosure (`<details>`), tabs, toast. See
+Planned, in this order: tabs, toast. See
 [`docs/DESIGN.md` → Roadmap](./docs/DESIGN.md#5-roadmap).
 
 ## Install
@@ -123,6 +125,31 @@ createPopover({
 Leave `role` off for a plain popover (a form, a hint, anything) and pick a `placement`
 (`"bottom-start"` by default, `"top"`, `"right"`, …).
 
+### A disclosure, or a whole accordion
+
+`createDisclosure` is a `<details>`/`<summary>` with the kit's box on it: the toggle, the
+keyboard, `aria-expanded` and find-in-page are the browser's, and one `name` shared by several
+of them is an accordion — the platform keeps at most one open, with no group component and no
+JS. The panel animates via `::details-content` where the browser has it, and snaps where it
+does not.
+
+```ts
+const { createDisclosure } = await loadAll();
+
+for (const [question, answer] of faq) {
+	const d = createDisclosure({
+		summary: question,
+		body: answer, // text | element | view
+		name: "faq", // ← the exclusive group; drop it for independent sections
+		onOpen: () => console.log("opened:", question),
+	});
+	list.append(d.el);
+}
+```
+
+The `<summary>` is a base-layer control like a button, so a plain `<details>` you write into a
+dialog body or a panel looks the same without a single class.
+
 ### Everything from vanilla is here too
 
 The index re-exports the whole base library, so one import gives you `observable`,
@@ -175,7 +202,9 @@ variants are the five `design-tokens` semantic roles, so a theme drives them all
 …and inside any vui component, bare markup gets that same look with no classes at all, which is
 what makes a `<form method="dialog">` dropped into a dialog body come out right. A menu item is
 the third control, keyed on its role: `<button role="menuitem">` in a `.vui-menu` needs no class
-either (`.vui-menuitem` is the same look outside a component; `--destructive` tints it). Building
+either (`.vui-menuitem` is the same look outside a component; `--destructive` tints it). A
+`<summary>` is the fourth, keyed on the element — a row with a caret that turns with its
+`<details>` (`.vui-summary` outside a component). Building
 a footer in JS? `button("Delete", { variant: "destructive", onClick })` returns an element with
 those classes on it. A container adapts every control inside it — its own and yours — by
 re-declaring `--vui-control-bg` &c. on itself; no descendant selectors anywhere. A variant is

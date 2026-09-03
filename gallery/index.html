@@ -502,6 +502,49 @@
 				></div>
 				<pre class="log" data-ref="log"></pre>
 			</section>
+
+			<!-- ============================================================ disclosure -->
+			<section class="component" id="disclosure">
+				<h2>disclosure</h2>
+				<p>
+					Native <code>&lt;details&gt;</code> /
+					<code>&lt;summary&gt;</code>: the toggle, the keyboard, the
+					open state and find-in-page are the browser's — there is no
+					aria glue to add. The kit adds the box, the caret, an
+					<code>isOpen</code> observable and the events. The summary
+					itself is a <em>base-layer control</em>, like a button, so a
+					bare <code>&lt;details&gt;</code> in a panel (there is one
+					below) comes out the same.
+				</p>
+				<div class="stack" data-ref="basics"></div>
+
+				<p style="margin: 1.5rem 0 0.5rem; font-size: 0.925rem">
+					One <code>name</code> shared by several of them is an
+					accordion — the browser keeps at most one open, with no group
+					component, no registry and no JS:
+				</p>
+				<div
+					data-ref="group"
+					style="display: grid; gap: 0.5rem"
+				></div>
+
+				<div class="vui-row" style="margin: 1rem 0">
+					<button type="button" class="vui-btn" data-on="click:openAll">
+						open all
+					</button>
+					<button type="button" class="vui-btn" data-on="click:closeAll">
+						close all
+					</button>
+					<button
+						type="button"
+						class="vui-btn"
+						data-on="click:inDialog"
+					>
+						inside a dialog
+					</button>
+				</div>
+				<pre class="log" data-ref="log"></pre>
+			</section>
 		</div>
 
 		<!-- ------------------------------------------------ gallery-only templates -->
@@ -614,6 +657,33 @@
 				<button type="button" data-on="click:close">
 					reset (action named “close”)
 				</button>
+			</div>
+		</template>
+
+		<!-- a disclosure panel: markup, bare controls — and a BARE <details> to
+		     show that the summary row is the base layer's, not this component's.
+		     That inner one gets the look with no classes and no factory; what it
+		     does NOT get is the box and the height animation, which are the
+		     component's own chrome. -->
+		<template id="tpl-gallery-disclosure-panel">
+			<div>
+				<p style="margin: 0 0 0.75rem">
+					The panel takes any <code>Slot</code> — text, an element, or
+					a view — and lifts the controls inside it exactly as a dialog
+					panel does.
+				</p>
+				<div class="vui-field">
+					<label for="g-note">Note</label>
+					<input id="g-note" name="note" type="text" placeholder="…" />
+				</div>
+				<details>
+					<summary>a bare &lt;details&gt;, not one class on it</summary>
+					<p style="margin: 0.5rem 0 0; font-size: 0.925rem">
+						Painted by <code>components/base.css</code> because it
+						sits inside a vui component — same row, same caret, same
+						focus ring, same hover off this box's surface.
+					</p>
+				</details>
 			</div>
 		</template>
 
@@ -913,6 +983,87 @@
 								onSelect: (value) =>
 									log(`dialog menu → vui:select "${value}"`),
 							});
+							dlg.open();
+						},
+					}),
+				);
+			});
+
+			/* ---- disclosure section --------------------------------------------- */
+			enhance("#disclosure", (el, track) => {
+				const r = refs(el);
+				const log = (line) => {
+					r.log.textContent += (r.log.textContent ? "\n" : "") + line;
+					r.log.scrollTop = r.log.scrollHeight;
+				};
+
+				// Unlike the dialogs above, these are created ONCE and kept: a
+				// disclosure IS its state, and there is nothing to throw away
+				// between opens.
+				const all = [];
+				const add = (slot, props) => {
+					const d = ui.createDisclosure({
+						...props,
+						onOpen: () => log(`${props.summary} → vui:open`),
+						onClose: () => log(`${props.summary} → vui:close`),
+					});
+					slot.append(d.el);
+					all.push(d);
+					track(() => d.destroy());
+					return d;
+				};
+
+				add(r.basics, {
+					summary: "What does the component add?",
+					body:
+						"The box, the caret, the height animation, an isOpen " +
+						"observable and the events out. Everything else — the " +
+						"toggle, the keyboard, aria-expanded, find-in-page — is " +
+						"the browser's.",
+				});
+				add(r.basics, {
+					summary: "Open by default, with a panel of markup",
+					open: true,
+					body: fromTemplate("tpl-gallery-disclosure-panel"),
+				});
+				// a VIEW slot: mounted, and destroyed with the disclosure
+				add(r.basics, {
+					summary: "A child view inside (data-scope)",
+					body: createCounter(),
+				});
+
+				// the accordion: one `name`, and the platform keeps one open
+				for (
+					const [summary, body] of [
+						["Shipping", "Free over €50. Two to four working days."],
+						["Returns", "Thirty days, no questions, no restocking fee."],
+						["Warranty", "Two years on everything, three on the frame."],
+					]
+				) {
+					add(r.group, { summary, body, name: "gallery-accordion" });
+				}
+
+				track(
+					delegate(el, {
+						// on the exclusive group this is the platform's own answer:
+						// each open closes the last one standing
+						openAll: () => all.forEach((d) => d.open()),
+						closeAll: () => all.forEach((d) => d.close()),
+
+						inDialog: () => {
+							const dlg = ui.createDialog({
+								title: "Advanced settings",
+								body: ui.createDisclosure({
+									summary: "Show the fine print",
+									body: fromTemplate(
+										"tpl-gallery-disclosure-panel",
+									),
+									onOpen: () => log("in dialog → vui:open"),
+									onClose: () => log("in dialog → vui:close"),
+								}), // a VIEW: destroyed with the dialog
+								onClose: () => dlg.destroy(),
+							});
+							document.body.append(dlg.el);
 							dlg.open();
 						},
 					}),

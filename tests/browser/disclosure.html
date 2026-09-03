@@ -1,0 +1,293 @@
+<!doctype html>
+<!--
+	Browser test for components/disclosure.html — run by `deno task test:browser`
+	(scripts/browser-test.ts drives headless Chrome and reads #result).
+
+	Contract: one line per check — `ok <name>` / `FAIL <name> (detail)` — and a
+	final `DONE` (or `ERROR …` on an uncaught exception).
+
+	Two halves: the component's own behavior (state, events, the native `name`
+	group, nesting, destroy) and the BASE layer's <summary> control, which is
+	what a plain <details> in a slot gets for free.
+-->
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<title>disclosure · browser test</title>
+		<link rel="icon" href="data:," />
+		<script type="importmap">
+		{
+			"imports": {
+				"@marianmeres/vanilla": "../../dist/mod.js",
+				"@marianmeres/vanilla-ui": "../../dist/mod.js"
+			}
+		}
+		</script>
+	</head>
+	<body>
+		<!-- a few tokens so "styled by the kit" is distinguishable from "not", and
+		     no transitions: the caret's rotation is read straight after a toggle,
+		     and getComputedStyle would otherwise return a mid-flight value. -->
+		<style>
+		:root {
+			--vui-color-surface-1: rgb(1, 2, 3);
+			--vui-color-surface-1-hover: rgb(4, 5, 6);
+			--vui-color-muted-foreground: rgb(7, 8, 9);
+			--vui-transition: 0ms;
+		}
+		</style>
+
+		<pre id="result"></pre>
+
+		<!-- a nested child component whose action is ALSO named "toggled" -->
+		<template id="tpl-child">
+			<div data-scope="child">
+				<button type="button" data-on="click:toggled">x</button>
+			</div>
+		</template>
+
+		<!-- bare consumer markup: no classes at all -->
+		<template id="tpl-bare">
+			<details class="bare">
+				<summary>bare</summary>
+				<p>panel</p>
+			</details>
+		</template>
+
+		<script type="module">
+		import {
+			createView,
+			delegate,
+			fromTemplate,
+			loadAll,
+			refs,
+		} from "@marianmeres/vanilla-ui";
+
+		const out = [];
+		const check = (name, cond, detail = "") =>
+			out.push(cond ? `ok ${name}` : `FAIL ${name}${detail ? ` (${detail})` : ""}`);
+		const flush = () => (document.getElementById("result").textContent = out.join("\n"));
+		// the native `toggle` event is async (a queued task) — wait for it, never a timer
+		const toggled = (d) =>
+			new Promise((r) =>
+				d.el.addEventListener("toggle", () => setTimeout(r, 0), { once: true })
+			);
+		const tick = () => new Promise((r) => setTimeout(r, 30));
+
+		try {
+			const { createDisclosure } = await loadAll();
+			check("template adopted", !!document.getElementById("tpl-vui-disclosure"));
+
+			/* ---- anatomy, slots ---------------------------------------------- */
+			const seen = [];
+			const d = createDisclosure({
+				summary: "S",
+				body: "B",
+				onOpen: () => seen.push("cb:open"),
+				onClose: () => seen.push("cb:close"),
+			});
+			d.el.addEventListener("vui:open", (e) => seen.push(`ev:open:${e.detail.open}`));
+			d.el.addEventListener("vui:close", (e) => seen.push(`ev:close:${e.detail.open}`));
+			document.body.append(d.el);
+			const summary = d.el.querySelector("summary");
+			const panel = d.el.querySelector(".vui-disclosure__body");
+			check("root is a native <details>", d.el.tagName === "DETAILS", d.el.tagName);
+			check("data-scope on root", d.el.dataset.scope === "disclosure");
+			check("summary text slot", summary.textContent === "S", summary.textContent);
+			check("body text slot", panel.textContent === "B", panel.textContent);
+			check("closed by default", !d.el.open && d.isOpen.get() === false);
+			check("closed: the panel is not rendered", !panel.checkVisibility());
+
+			/* ---- open / close / toggle: sync mirror, async event -------------- */
+			let w = toggled(d);
+			d.open();
+			check("open(): el.open synchronously", d.el.open);
+			check("open(): isOpen synchronously", d.isOpen.get() === true);
+			await w;
+			check("open() -> vui:open (callback + event)", seen.join() === "cb:open,ev:open:true", seen.join());
+			check("open: the panel is rendered", panel.checkVisibility());
+
+			seen.length = 0;
+			w = toggled(d);
+			d.close();
+			check("close(): el.open false synchronously", !d.el.open);
+			await w;
+			check("close() -> vui:close", seen.join() === "cb:close,ev:close:false", seen.join());
+
+			seen.length = 0;
+			w = toggled(d);
+			d.toggle();
+			await w;
+			check("toggle() opens", d.isOpen.get() === true && seen.join() === "cb:open,ev:open:true", seen.join());
+			seen.length = 0;
+			w = toggled(d);
+			d.toggle();
+			await w;
+			check("toggle() closes", d.isOpen.get() === false && seen.join() === "cb:close,ev:close:false", seen.join());
+
+			// the platform's own route: a click on the summary
+			seen.length = 0;
+			w = toggled(d);
+			summary.click();
+			await w;
+			check("summary click -> open + vui:open", d.el.open && d.isOpen.get() === true, seen.join());
+			check("summary click: one event, not two", seen.join() === "cb:open,ev:open:true", seen.join());
+			seen.length = 0;
+			w = toggled(d);
+			d.close();
+			await w;
+
+			// no-ops
+			seen.length = 0;
+			d.close();
+			d.el.open = false;
+			await tick();
+			check("close() when closed is a no-op", seen.length === 0, seen.join());
+
+			/* ---- open: true reports no change it did not make ------------------ */
+			const pre = [];
+			const dOpen = createDisclosure({
+				summary: "s",
+				open: true,
+				onOpen: () => pre.push("cb:open"),
+				onClose: () => pre.push("cb:close"),
+			});
+			dOpen.el.addEventListener("vui:open", () => pre.push("ev:open"));
+			document.body.append(dOpen.el);
+			check("open:true -> el.open + isOpen", dOpen.el.open && dOpen.isOpen.get() === true);
+			await tick();
+			check("open:true fires nothing (a state, not a change)", pre.length === 0, pre.join());
+			w = toggled(dOpen);
+			dOpen.close();
+			await w;
+			check("…and the first real change still fires", pre.join() === "cb:close", pre.join());
+			dOpen.destroy();
+
+			/* ---- the native exclusive group (`name`) --------------------------- */
+			const log = [];
+			const a = createDisclosure({ summary: "a", name: "grp", open: true });
+			const b = createDisclosure({ summary: "b", name: "grp" });
+			a.el.addEventListener("vui:close", () => log.push("a:close"));
+			b.el.addEventListener("vui:open", () => log.push("b:open"));
+			document.body.append(a.el, b.el);
+			check("name is on the element", a.el.getAttribute("name") === "grp");
+			w = toggled(a);
+			b.open();
+			await w;
+			await tick();
+			check("exclusive: opening b closed a", !a.el.open && b.el.open, `a=${a.el.open} b=${b.el.open}`);
+			check("exclusive: a settled its own isOpen", a.isOpen.get() === false);
+			check("exclusive: a reported it (vui:close)", log.join() === "b:open,a:close" || log.join() === "a:close,b:open", log.join());
+			a.destroy();
+			b.destroy();
+
+			/* ---- nesting: data-scope keeps the actions apart -------------------- */
+			const child = createView((track) => {
+				const el = fromTemplate("tpl-child");
+				let hits = 0;
+				track(delegate(el, { toggled: () => hits++ }));
+				return { el, hits: () => hits };
+			});
+			const inner = createDisclosure({ summary: "inner", body: child });
+			const outerBox = document.createElement("div");
+			const outer = createDisclosure({ summary: "outer", body: inner, open: true });
+			outerBox.append(outer.el);
+			document.body.append(outerBox);
+			w = toggled(inner);
+			inner.open();
+			await w;
+			await tick();
+			check("nested: the inner opened", inner.isOpen.get() === true);
+			check("nested: the outer is untouched", outer.isOpen.get() === true && outer.el.open);
+			child.el.querySelector("button").click();
+			await tick();
+			check("nested data-scope: the child's own 'toggled' action fired", child.hits() === 1);
+			check("nested data-scope: it did not reach the disclosure", inner.el.open);
+
+			/* ---- destroy cascades ---------------------------------------------- */
+			outer.destroy();
+			check("destroy(): root removed", !outer.el.isConnected);
+			check("destroy(): mounted child view removed too", !inner.el.isConnected);
+			check("destroy(): isOpen false", outer.isOpen.get() === false);
+			outerBox.remove();
+
+			/* ---- the box (this component's own chrome) -------------------------- */
+			const cs = getComputedStyle(d.el);
+			check("box: container radius tier", cs.borderRadius === "12px", cs.borderRadius);
+			check("box: 1px border", cs.borderTopWidth === "1px", cs.borderTopWidth);
+			check("box: clips to its corners", cs.overflow === "clip", cs.overflow);
+			check(
+				"box declares --vui-control-bg",
+				cs.getPropertyValue("--vui-control-bg").trim() === "rgb(1, 2, 3)",
+				cs.getPropertyValue("--vui-control-bg"),
+			);
+			if (CSS.supports("interpolate-size", "allow-keywords")) {
+				check(
+					"box: `auto` is interpolable (interpolate-size)",
+					cs.interpolateSize === "allow-keywords",
+					cs.interpolateSize,
+				);
+			}
+
+			/* ---- the <summary> is a BASE control -------------------------------- */
+			const scs = getComputedStyle(summary);
+			check("summary: laid out by the base layer", scs.display === "flex", scs.display);
+			check("summary: no UA marker", scs.listStyleType === "none", scs.listStyleType);
+			check("summary: pointer cursor", scs.cursor === "pointer", scs.cursor);
+			check("summary: control min-height", scs.minHeight === "40px", scs.minHeight);
+			// the container's context reaches it — the summary hovers with the box
+			check(
+				"summary: inherits the box's control context",
+				scs.getPropertyValue("--vui-control-bg-hover").trim() === "rgb(4, 5, 6)",
+				scs.getPropertyValue("--vui-control-bg-hover"),
+			);
+			const caret = getComputedStyle(summary, "::after");
+			check("summary: a caret, muted", caret.color === "rgb(7, 8, 9)", caret.color);
+			check("summary: the caret points down when closed", caret.rotate === "45deg", caret.rotate);
+			w = toggled(d);
+			d.open();
+			await w;
+			check(
+				"summary: …and up when open",
+				getComputedStyle(summary, "::after").rotate === "225deg",
+				getComputedStyle(summary, "::after").rotate,
+			);
+
+			// a BARE consumer <details> in a slot — no classes at all — is styled
+			const bare = fromTemplate("tpl-bare");
+			panel.replaceChildren(bare);
+			const bareSummary = bare.querySelector("summary");
+			const bcs = getComputedStyle(bareSummary);
+			check("bare <summary> in a slot is a control too", bcs.display === "flex", bcs.display);
+			check(
+				"bare <summary> takes the box's control context",
+				bcs.getPropertyValue("--vui-control-bg-hover").trim() === "rgb(4, 5, 6)",
+				bcs.getPropertyValue("--vui-control-bg-hover"),
+			);
+			check(
+				"bare <summary>: caret points up when its own <details> is open",
+				(bare.open = true) &&
+					getComputedStyle(bareSummary, "::after").rotate === "225deg",
+				getComputedStyle(bareSummary, "::after").rotate,
+			);
+			bare.remove();
+
+			// …and the same look outside any component, by class
+			const loose = fromTemplate("tpl-bare");
+			loose.querySelector("summary").className = "vui-summary";
+			document.body.append(loose);
+			check(
+				".vui-summary is the same control outside a component",
+				getComputedStyle(loose.querySelector("summary")).display === "flex",
+			);
+			loose.remove();
+			d.destroy();
+
+			out.push("DONE");
+		} catch (e) {
+			out.push("ERROR " + (e && e.stack || e));
+		}
+		flush();
+		</script>
+	</body>
+</html>

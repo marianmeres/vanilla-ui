@@ -90,10 +90,11 @@ function declarationBlocks(css: string): { selector: string; body: string }[] {
 
 /** Does this selector target a control the base layer owns? */
 const paintsAControl = (selector: string) =>
-	/(^|[\s,>+~(])(button|select|textarea|input)\b/.test(selector) ||
+	/(^|[\s,>+~(])(button|select|textarea|input|summary)\b/.test(selector) ||
 	selector.includes(".vui-btn") ||
 	selector.includes(".vui-input") ||
 	selector.includes(".vui-menuitem") ||
+	selector.includes(".vui-summary") ||
 	/\[role[\^$*]?=["']?menuitem/.test(selector);
 
 /** Properties that decide how a control LOOKS — base's job, never a component's. */

@@ -329,13 +329,19 @@ async function loadPopover(base = COMPONENTS_BASE) {
   const mod = await loadComponent(componentUrl("popover", base));
   return mod.createPopover;
 }
+async function loadDisclosure(base = COMPONENTS_BASE) {
+  await loadStyles(base);
+  const mod = await loadComponent(componentUrl("disclosure", base));
+  return mod.createDisclosure;
+}
 async function loadAll(base = COMPONENTS_BASE) {
   await loadStyles(base);
-  const [createDialog, createPopover] = await Promise.all([
+  const [createDialog, createDisclosure, createPopover] = await Promise.all([
     loadDialog(base),
+    loadDisclosure(base),
     loadPopover(base)
   ]);
-  return { createDialog, createPopover };
+  return { createDialog, createDisclosure, createPopover };
 }
 export {
   BASE_STYLES_ID,
@@ -353,6 +359,7 @@ export {
   loadAll,
   loadComponent,
   loadDialog,
+  loadDisclosure,
   loadPopover,
   loadStyles,
   loadTemplates,

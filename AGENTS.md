@@ -43,7 +43,7 @@ README.md · API.md        — human docs
    that imports vanilla by **bare specifier** only and exports `create<Name>(props)`. The lint
    also fails raw `--vui-color-*` reads, unknown `--vui-*` names, color literals outside a
    `var()` fallback, and any paint declared on a control selector — buttons, inputs, menu
-   items (see 4 and 9).
+   items, summaries (see 4 and 9).
 3. **`data-scope` on every root.** It is vanilla's component boundary; without it nested
    components collide on `data-ref` names and `data-on` actions.
 4. **Theming goes through the base vocabulary.** `components/base.css` reads every
@@ -62,15 +62,18 @@ README.md · API.md        — human docs
 7. **Platform first.** Native `<dialog>`, Popover API, `<details>` before any hand-rolled
    behavior. The popover is the worked example (DESIGN §D10): `popover="auto"` for dismiss and
    stacking, the anchor as the native invoker, CSS Anchor Positioning for placement — and JS
-   only where the browser has none of it. If a primitive would need keyed list diffing, defer
+   only where the browser has none of it. The disclosure is the extreme case (§D11): the
+   accordion is `<details name>`, the motion is `::details-content`, and there is no aria or
+   keyboard glue at all. If a primitive would need keyed list diffing, defer
    it (see DESIGN §6).
 8. **Types live in `src/mod.ts`.** Components are plain JS; declare `<Name>Props`,
    `<Name>View`, `Create<Name>`, add `load<Name>()`, and extend `VanillaUi` + `loadAll()`.
 9. **Controls belong to the base layer, never to a component.** Buttons and inputs are styles,
    not components (DESIGN §D9): `.vui-btn` + the five design-tokens roles
    (`--primary|accent|destructive|warning|success`) + `--ghost|--icon`, `.vui-input`,
-   `.vui-field`, `.vui-row`, and the menu item — keyed on `role="menuitem"` inside a component,
-   `.vui-menuitem` (+ `--destructive`) outside, laid out by `.vui-menu` — in
+   `.vui-field`, `.vui-row`, the menu item — keyed on `role="menuitem"` inside a component,
+   `.vui-menuitem` (+ `--destructive`) outside, laid out by `.vui-menu` — and the `<summary>`
+   row (keyed on the element; `.vui-summary` outside, caret and all) in
    `components/base.css`, plus a zero-specificity default so a **bare `<button>` inside any
    vui component** (a consumer's slot content) is styled too. A component may position a
    control; it may not paint one — to adapt controls to

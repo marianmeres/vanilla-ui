@@ -16,7 +16,7 @@ Fetch and adopt every component (in parallel) and return the typed factories. Ca
 - `base` (`string`, optional) — URL of the `components/` directory. Default:
   [`COMPONENTS_BASE`](#components_base).
 
-**Returns:** `Promise<VanillaUi>` — `{ createDialog, createPopover }`.
+**Returns:** `Promise<VanillaUi>` — `{ createDialog, createDisclosure, createPopover }`.
 
 **Example:**
 
@@ -35,6 +35,18 @@ Load `components/dialog.html` alone and return its typed factory.
 - `base` (`string`, optional) — as in `loadAll`.
 
 **Returns:** `Promise<CreateDialog>`.
+
+---
+
+### `loadDisclosure(base?)`
+
+Load `components/disclosure.html` alone and return its typed factory.
+
+**Parameters:**
+
+- `base` (`string`, optional) — as in `loadAll`.
+
+**Returns:** `Promise<CreateDisclosure>`.
 
 ---
 
@@ -297,18 +309,19 @@ consistent without a rule per variant. Your own role works the same way, no kit 
 
 ### Classes
 
-| Class                                                                          | What                                                         |
-| ------------------------------------------------------------------------------ | ------------------------------------------------------------ |
-| `.vui-btn`                                                                     | the button primitive (`all: unset` + the control paint)      |
-| `.vui-btn--primary` / `--accent` / `--destructive` / `--warning` / `--success` | the five design-tokens roles, filled                         |
-| `.vui-btn--ghost`                                                              | no fill; borrows its container's foreground on hover         |
-| `.vui-btn--icon`                                                               | square + round, for a single glyph                           |
-| `.vui-input` / `.vui-select`                                                   | text inputs, selects, textareas                              |
-| `.vui-menuitem`                                                                | a menu item (what `role="menuitem"` gets inside a component) |
-| `.vui-menuitem--destructive`                                                   | colored text and a tinted hover — never a filled row         |
-| `.vui-field`                                                                   | a stacked `<label>` + full-width control                     |
-| `.vui-row`                                                                     | a wrapping flex row at `--vui-gap` (button rows, toolbars)   |
-| `.vui-menu`                                                                    | a vertical list of items, with `<hr>` separators             |
+| Class                                                                          | What                                                             |
+| ------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| `.vui-btn`                                                                     | the button primitive (`all: unset` + the control paint)          |
+| `.vui-btn--primary` / `--accent` / `--destructive` / `--warning` / `--success` | the five design-tokens roles, filled                             |
+| `.vui-btn--ghost`                                                              | no fill; borrows its container's foreground on hover             |
+| `.vui-btn--icon`                                                               | square + round, for a single glyph                               |
+| `.vui-input` / `.vui-select`                                                   | text inputs, selects, textareas                                  |
+| `.vui-menuitem`                                                                | a menu item (what `role="menuitem"` gets inside a component)     |
+| `.vui-summary`                                                                 | a disclosure header (what a `<summary>` gets inside a component) |
+| `.vui-menuitem--destructive`                                                   | colored text and a tinted hover — never a filled row             |
+| `.vui-field`                                                                   | a stacked `<label>` + full-width control                         |
+| `.vui-row`                                                                     | a wrapping flex row at `--vui-gap` (button rows, toolbars)       |
+| `.vui-menu`                                                                    | a vertical list of items, with `<hr>` separators                 |
 
 **Menu items** are the third control, keyed on the ARIA role the menu popover needs anyway:
 inside any vui container, `[role="menuitem"]` (also `menuitemcheckbox` / `menuitemradio`) is
@@ -319,11 +332,18 @@ purpose, so the role wins over `.vui-btn` and `button("Rename", { role: "menuite
 as an item. Don't put `.vui-btn--destructive` on one (its white foreground on no fill);
 `.vui-menuitem--destructive` is the item-shaped version.
 
+**Summaries** are the fourth control, keyed on the element: inside any vui container a
+`<summary>` is painted as a row like a menu item — full width, transparent at rest, hover and
+active from the [control context](#control-context) — with the UA marker replaced by a caret
+that turns with its `<details>`'s `[open]`, and the focus ring drawn inside (a disclosure box
+clips itself to its radius). `.vui-summary` is the same look outside a container. So a plain
+`<details>` in a dialog body or a disclosure panel comes out like the kit's own.
+
 ### Bare markup inside a component
 
 Any element carrying a `vui-` class is a **container hook**: bare `<button>`, `<input>`,
-`<select>`, `<textarea>` and `[role="menuitem"]` descendants get the control look with no
-classes at all. So a `<form method="dialog">` dropped into a dialog body is styled, and takes
+`<select>`, `<textarea>`, `<summary>` and `[role="menuitem"]` descendants get the control look
+with no classes at all. So a `<form method="dialog">` dropped into a dialog body is styled, and takes
 that dialog's control context, without knowing the kit exists:
 
 ```html
@@ -539,6 +559,84 @@ the viewport.
 
 ---
 
+### `createDisclosure(props?)` — `components/disclosure.html`
+
+A collapsible section on the native `<details>`/`<summary>`. The platform gives the toggle, the
+keyboard, `aria-expanded`, the open state (an attribute) and find-in-page expanding a closed
+section to show a hit — so there is **no aria or keyboard glue here at all**. The component adds
+the box, an `isOpen` observable, the events, and the panel's height animation
+(`::details-content`). The `<summary>` itself is a [base-layer control](#classes), so a plain
+`<details>` in a slot looks the same. Rationale: [`docs/DESIGN.md` §D11](./docs/DESIGN.md).
+
+**Parameters:** `props` (`DisclosureProps`) — all optional
+
+| Prop      | Type         | Default | Description                                                                                                                              |
+| --------- | ------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `summary` | `Slot`       | `""`    | The header: text, an element, or a view — rendered inside the native `<summary>`                                                         |
+| `body`    | `Slot`       | —       | The panel: text, an element, or a view                                                                                                   |
+| `open`    | `boolean`    | `false` | Start expanded. The state it is created in fires nothing                                                                                 |
+| `name`    | `string`     | —       | The native **exclusive group**: several disclosures sharing a `name` keep at most one open, enforced by the browser — no group component |
+| `onOpen`  | `() => void` | —       | After the native `toggle` reports it open                                                                                                |
+| `onClose` | `() => void` | —       | After the native `toggle` reports it closed — whatever closed it                                                                         |
+
+**Returns:** `DisclosureView`
+
+| Member      | Description                                                                                                                   |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `el`        | The native `<details>` root (`data-scope="disclosure"`)                                                                       |
+| `isOpen`    | `ReadonlyObservable<boolean>` — settled synchronously by `open()`/`close()`, and by the native `toggle` for every other route |
+| `open()`    | Expand it. No-op if already open                                                                                              |
+| `close()`   | Collapse it. No-op if already closed                                                                                          |
+| `toggle()`  | One or the other                                                                                                              |
+| `destroy()` | Runs cleanups, destroys a mounted `summary` / `body` view, removes `el`                                                       |
+
+**Events** (dispatched on `el`, bubbling):
+
+| Event       | `detail`          | When                                                                  |
+| ----------- | ----------------- | --------------------------------------------------------------------- |
+| `vui:open`  | `{ open: true }`  | after the native `toggle` — any route, but only on a real change      |
+| `vui:close` | `{ open: false }` | after the native `toggle` — including an exclusive sibling closing it |
+
+"Any route" is the point: the summary, `open()`/`close()`, find-in-page expanding it, and the
+browser closing it because another member of its `name` group opened all arrive at the native
+`toggle` and nowhere else.
+
+**CSS variables read** (from the [base vocabulary](#the-vocabulary) and
+[structural tokens](#structural-tokens), each with a fallback):
+
+`--vui-surface`, `--vui-surface-foreground`, `--vui-border`, `--vui-border-width`,
+`--vui-radius-container`, `--vui-transition`.
+
+**CSS variables set** — on the root, so the summary and every control in the panel lift off the
+surface as they do in a dialog panel: `--vui-control-bg`, `--vui-control-foreground`,
+`--vui-control-bg-hover`, `--vui-control-bg-active`, `--vui-control-border`.
+
+**Example** — an FAQ accordion, exclusive by the platform:
+
+```ts
+for (const [q, a] of faq) {
+	const d = createDisclosure({ summary: q, body: a, name: "faq" });
+	list.append(d.el);
+}
+```
+
+```ts
+// one section, driven from outside
+const advanced = createDisclosure({
+	summary: "Advanced settings",
+	body: fromTemplate("tpl-advanced"),
+	onOpen: () => analytics("advanced-opened"),
+});
+form.append(advanced.el);
+track(advanced.isOpen.subscribe((open) => (saveBtn.disabled = open)));
+```
+
+The panel animates where the browser has `::details-content` and snaps where it does not; either
+way `--vui-transition` (0ms under `prefers-reduced-motion`) is the duration. There is no
+`disabled` prop — the platform has no disabled `<details>`.
+
+---
+
 ## Types
 
 ### `Slot`
@@ -656,11 +754,43 @@ interface PopoverView extends ViewInstance {
 type CreatePopover = (props: PopoverProps) => PopoverView;
 ```
 
+### `DisclosureProps`
+
+```ts
+interface DisclosureProps {
+	summary?: Slot;
+	body?: Slot;
+	open?: boolean; // default false
+	name?: string; // the native exclusive group
+	onOpen?: () => void;
+	onClose?: () => void;
+}
+```
+
+### `DisclosureView`
+
+```ts
+interface DisclosureView extends ViewInstance {
+	el: HTMLDetailsElement;
+	isOpen: ReadonlyObservable<boolean>;
+	open(): void;
+	close(): void;
+	toggle(): void;
+}
+```
+
+### `CreateDisclosure`
+
+```ts
+type CreateDisclosure = (props?: DisclosureProps) => DisclosureView;
+```
+
 ### `VanillaUi`
 
 ```ts
 interface VanillaUi {
 	createDialog: CreateDialog;
+	createDisclosure: CreateDisclosure;
 	createPopover: CreatePopover;
 }
 ```

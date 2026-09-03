@@ -16,7 +16,7 @@ Deno.test("componentUrl builds <base>/<name>.html", () => {
 });
 
 Deno.test("every component file the index knows about exists on disk", async () => {
-	for (const name of ["dialog", "popover"]) {
+	for (const name of ["dialog", "disclosure", "popover"]) {
 		const stat = await Deno.stat(new URL(ui.componentUrl(name)));
 		assert(stat.isFile, `${name}.html missing`);
 	}

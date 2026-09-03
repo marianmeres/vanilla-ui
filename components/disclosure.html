@@ -1,0 +1,221 @@
+<!--
+	vui · disclosure — a collapsible section on the native <details>/<summary>.
+
+	SINGLE-FILE COMPONENT: markup (<template>), styling (<style>, @scope'd and
+	@layer'd) and logic (inline <script type="module">) in one file. Load it with
+	loadComponent() (or the typed loadDisclosure() / loadAll() from the index).
+
+	The platform does nearly all of it: <summary> is the button (click, Enter,
+	Space, its own `aria-expanded`), the `open` attribute IS the state,
+	find-in-page expands a closed one to show a match, and `name` makes a group
+	of them mutually exclusive — an accordion with no group component, no
+	registry and no JS. This file adds the box, the height animation, an
+	`isOpen` observable and the events out. There is no aria glue to add.
+
+	Props (all optional):
+	  summary  Slot     text | HTMLElement | view — the header
+	  body     Slot     text | HTMLElement | view — the panel
+	  open     boolean  start expanded                              [false]
+	  name     string   native exclusive group: same name, one open at a time
+	  onOpen   ()       callback up, after the native `toggle`
+	  onClose  ()       callback up, after the native `toggle`
+
+	Returns a view: { el, isOpen, open(), close(), toggle(), destroy() }
+
+	Events out (CustomEvent on `el`, bubbling):
+	  "vui:open"   detail: { open: true }    — after the native `toggle`
+	  "vui:close"  detail: { open: false }   — after the native `toggle`
+
+	Both report a CHANGE, whatever caused it: the summary, open()/close(),
+	find-in-page, or a sibling in the same `name` group closing this one.
+
+	The <summary>'s look — the row, the hover, the focus ring, the caret — is
+	the BASE layer's (components/base.css), keyed on the element, so a plain
+	<details> a consumer drops into a dialog body comes out the same. This file
+	styles the box around it.
+
+	Imports the library by BARE specifier — loadComponent() runs this module
+	from a blob: URL, which resolves only through the host's import map.
+-->
+<template id="tpl-vui-disclosure">
+	<details class="vui-disclosure" data-scope="disclosure" data-on="toggle:toggled">
+		<summary class="vui-disclosure__summary" data-ref="summary"></summary>
+		<div class="vui-disclosure__body" data-ref="body"></div>
+	</details>
+</template>
+
+<!--
+	Styles are adopted into <head> verbatim (global cascade), encapsulated by
+	native CSS @scope against the root class and placed in the `vui.components`
+	cascade layer (declared, and ordered after `vui.base`, by components/base.css).
+
+	This block styles the disclosure's own CHROME only — the box, the divider,
+	the panel's motion. It never paints a control: the <summary> is a base-layer
+	control like a button or a menu item, and so is anything the consumer drops
+	into the panel; the box adapts them to its surface by re-declaring
+	`--vui-control-*` on itself. Colors go through the base vocabulary
+	(`--vui-surface`, not `--vui-color-surface`) with a system-color fallback, so
+	a theme is optional and this file still renders alone.
+-->
+<style>
+@layer vui.components {
+	@scope (.vui-disclosure) {
+		:scope {
+			--_bg: var(--vui-surface, Canvas);
+			--_fg: var(--vui-surface-foreground, CanvasText);
+			--_border: var(
+				--vui-border,
+				color-mix(in srgb, CanvasText 20%, transparent)
+			);
+			--_radius: var(--vui-radius-container, 0.75rem);
+
+			display: block;
+			border: var(--vui-border-width, 1px) solid var(--_border);
+			border-radius: var(--_radius);
+			background: var(--_bg);
+			color: var(--_fg);
+			/* the summary fills the box edge to edge, so its hover has to follow
+			   the corners. Safe because every control in here draws its focus
+			   ring inside (the summary) or sits behind the panel's padding. */
+			overflow: clip;
+
+			/* CONTEXT: the box IS a surface, so every control inside it — the
+			   summary and whatever lands in the panel — lifts one step and stays
+			   visible, exactly as in the dialog panel. No fallbacks needed:
+			   nothing reads them unless base.css is loaded, and then they are
+			   defined. */
+			--vui-control-bg: var(--vui-surface-1);
+			--vui-control-foreground: var(--vui-surface-1-foreground);
+			--vui-control-bg-hover: var(--vui-surface-1-hover);
+			--vui-control-bg-active: var(--vui-surface-1-active);
+			--vui-control-border: var(--vui-surface-1-hover);
+
+			/* what makes `auto` a height a transition can interpolate — inherited,
+			   so it reaches the panel below (and nothing outside this box) */
+			interpolate-size: allow-keywords;
+		}
+
+		/* THE PANEL is the platform's own pseudo-element: everything after the
+		   summary, without a wrapper of our own. `content-visibility` transitions
+		   discretely so the content stays rendered while the height plays out. A
+		   browser without ::details-content drops these two rules whole and snaps
+		   open — which is what a bare <details> does anyway. --vui-transition is
+		   0ms under prefers-reduced-motion (base.css), making it instant there. */
+		:scope::details-content {
+			block-size: 0;
+			overflow: clip;
+			transition:
+				block-size var(--vui-transition) ease,
+				content-visibility var(--vui-transition) allow-discrete;
+		}
+		:scope[open]::details-content {
+			block-size: auto;
+		}
+
+		.vui-disclosure__body {
+			/* aligned with the summary's own inline padding (the control
+			   channel's default), a little more air below */
+			padding: 0.75rem 0.9rem 0.9rem;
+			border-top: var(--vui-border-width, 1px) solid var(--_border);
+			line-height: 1.5;
+		}
+		/* wins over the base layer's `display` on a hidden control */
+		:scope [hidden] {
+			display: none;
+		}
+	}
+}
+</style>
+
+<script type="module">
+	import {
+		createView,
+		delegate,
+		fromTemplate,
+		mount,
+		observable,
+		refs,
+	} from "@marianmeres/vanilla";
+
+	/** Fill a slot from a `Slot` value: text | element | view (mounted + tracked). */
+	function fill(track, slot, content) {
+		if (content == null) return;
+		if (typeof content === "string") slot.textContent = content;
+		else if (content instanceof Node) slot.replaceChildren(content);
+		else mount(track, slot, content);
+	}
+
+	export function createDisclosure({
+		summary = "",
+		body,
+		open = false,
+		name,
+		onOpen,
+		onClose,
+	} = {}) {
+		return createView((track) => {
+			const el = fromTemplate("tpl-vui-disclosure");
+			const r = refs(el);
+			const isOpen = observable(!!open);
+			// destroy() removes the node; removal fires no `toggle`, so settle the
+			// observable ourselves (no callback — teardown is not a verdict).
+			track(() => isOpen.set(false));
+
+			fill(track, r.summary, summary);
+			fill(track, r.body, body);
+
+			// The native exclusive group: same `name`, one open at a time. The
+			// browser closes the others, and each one's own `toggle` settles its
+			// own view — there is no registry here on purpose. Set as an
+			// ATTRIBUTE: it is what the browser reads, IDL property or not.
+			if (name) el.setAttribute("name", name);
+			if (open) el.open = true;
+
+			const api = {
+				el,
+				isOpen,
+				open() {
+					if (el.open) return;
+					el.open = true; // → native "toggle" (async) → `toggled`
+					isOpen.set(true); // mirror el.open, which is already true
+				},
+				close() {
+					if (!el.open) return;
+					el.open = false;
+					isOpen.set(false);
+				},
+				toggle() {
+					el.open ? api.close() : api.open();
+				},
+			};
+
+			// The root itself carries data-on for its own (non-bubbling) `toggle` —
+			// delegate listens on the root, so it sees it. That event is the single
+			// source of truth: the summary, open()/close(), find-in-page and a
+			// sibling in the same `name` group all arrive here and nowhere else.
+			let last = isOpen.get();
+			track(
+				delegate(el, {
+					toggled: () => {
+						const isNowOpen = el.open;
+						isOpen.set(isNowOpen);
+						// Report a CHANGE, not a state: `open: true` at creation queues
+						// a toggle of its own, and nothing should fire for the state the
+						// view was created in.
+						if (isNowOpen === last) return;
+						last = isNowOpen;
+						(isNowOpen ? onOpen : onClose)?.();
+						el.dispatchEvent(
+							new CustomEvent(isNowOpen ? "vui:open" : "vui:close", {
+								bubbles: true,
+								detail: { open: isNowOpen },
+							}),
+						);
+					},
+				}),
+			);
+
+			return api;
+		});
+	}
+</script>

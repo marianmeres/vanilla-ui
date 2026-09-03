@@ -22,4 +22,9 @@ the native Popover API (popover="auto": top layer, light dismiss, nesting; a <bu
 the native invoker), placed by CSS Anchor Positioning with position-try flips and by a small JS
 measure/flip/clamp where a browser lacks it, and with role "menu" a menu (focus on open,
 arrow/Home/End keys, Tab closes, vui:select with the item's value) whose items base.css paints by
-their role alone (.vui-menu, .vui-menuitem, --destructive).
+their role alone (.vui-menu, .vui-menuitem, --destructive); and disclosure on the native
+<details>/<summary> — a box, an isOpen observable and vui:open/vui:close over a platform that
+already has the toggle, the keyboard, aria-expanded and find-in-page, with `name` giving a
+natively exclusive accordion (no group component, no registry) and ::details-content the height
+animation. The <summary> row is a base control too, keyed on the element (.vui-summary outside a
+component), so a plain <details> in any slot comes out the same.

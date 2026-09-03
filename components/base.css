@@ -18,20 +18,25 @@
  *      rounded card are not the same rounding, and a popover and a modal are
  *      not the same elevation.
  *
- *   3. THE CONTROL PRIMITIVES — buttons, inputs, menu items, the focus ring. A
- *      button is a *style* primitive, not a component: it has no behavior, and
- *      a factory could not reach the `<button value="save">` a consumer writes
- *      inside a `<form method="dialog">` in a dialog's slot. CSS can. Two ways
- *      in:
+ *   3. THE CONTROL PRIMITIVES — buttons, inputs, menu items, summaries, the
+ *      focus ring. A button is a *style* primitive, not a component: it has no
+ *      behavior, and a factory could not reach the `<button value="save">` a
+ *      consumer writes inside a `<form method="dialog">` in a dialog's slot.
+ *      CSS can. Four ways in:
  *
  *        <button class="vui-btn vui-btn--primary">   — anywhere on the page
  *        <button>                                    — inside any vui component
  *        <button role="menuitem">                    — a menu item, by its role
+ *        <summary>                                   — a disclosure header, by
+ *                                                      its element
  *
  *      The second is a zero-specificity default (see "the container hook"
  *      below), so slot content looks right with no consumer knowledge at all.
  *      The third is keyed on the ARIA role the popover's menu glue needs
  *      anyway — one attribute buys the semantics, the keyboard and the look.
+ *      The fourth needs no key at all: inside a vui container a <summary> has
+ *      exactly one shape it can take, so a plain <details> dropped into a
+ *      dialog body or a disclosure panel comes out like the kit's own.
  *
  * CASCADE LAYERS. Everything here is in `vui.base`; every component's `@scope`
  * block is in `vui.components`. Layered styles lose to unlayered ones whatever
@@ -470,6 +475,83 @@
 		&:hover,
 		&:focus-visible {
 			background: color-mix(in srgb, var(--vui-destructive) 12%, transparent);
+		}
+	}
+
+	/* ── summaries ───────────────────────────────────────────────────────────
+	   The fourth control: the clickable header of a <details>. Keyed on the
+	   ELEMENT, not a class — a <summary> inside a vui container has exactly one
+	   shape it can take, and (as with the menu item's role) the markup a
+	   consumer already writes says which one. `.vui-summary` is the same look
+	   outside a container.
+
+	   It is a ROW, so it follows the menu item rather than the button: full
+	   width, transparent at rest, hover and active from the context channel,
+	   and the focus ring drawn INSIDE — a container that clips itself to its
+	   radius (components/disclosure.html does) would cut an outset one off.
+	   The UA's marker goes, and a caret drawn from two borders takes its place,
+	   turning with the parent's [open] state. */
+	.vui-summary,
+	:where([class^="vui-"], [class*=" vui-"]) :where(summary) {
+		all: unset;
+		box-sizing: border-box;
+		display: flex;
+		align-items: center;
+		gap: 0.6em;
+		width: 100%;
+		cursor: pointer;
+		user-select: none;
+		list-style: none; /* the UA marker — ours is the ::after below */
+		font-weight: 500;
+		line-height: 1.25;
+		min-height: var(--vui-control-min-height, 2.5rem);
+		padding: var(--vui-control-py, 0.5rem) var(--vui-control-px, 0.9rem);
+		color: inherit;
+		transition: background-color var(--vui-transition);
+
+		/* Safari draws its marker as a pseudo-element, not as a list marker */
+		&::-webkit-details-marker {
+			display: none;
+		}
+		&:hover {
+			background: var(--vui-control-bg-hover, var(--vui-surface-hover));
+		}
+		&:active {
+			background: var(
+				--vui-control-bg-active,
+				color-mix(
+					in srgb,
+					currentColor 12%,
+					var(--vui-control-bg-hover, var(--vui-surface-hover))
+				)
+			);
+		}
+		/* drawn inside, like the menu item's — see above */
+		&:focus-visible {
+			outline: var(--vui-focus-width) solid var(--vui-ring);
+			outline-offset: calc(-1 * var(--vui-focus-width));
+		}
+		/* the caret: a square with two of its borders, rotated — pointing down
+		   when closed, up when open. The translate is optical centering: the
+		   rotated corner hangs below the box one way and above it the other. */
+		&::after {
+			content: "";
+			flex: none;
+			margin-inline-start: auto;
+			width: 0.45em;
+			height: 0.45em;
+			border-inline-end: 2px solid;
+			border-block-end: 2px solid;
+			color: var(--vui-muted-foreground);
+			rotate: 45deg;
+			translate: 0 -0.12em;
+			transition:
+				rotate var(--vui-transition),
+				translate var(--vui-transition);
+		}
+		:where([open]) > &::after {
+			rotate: 225deg;
+			translate: 0 0.12em;
 		}
 	}
 

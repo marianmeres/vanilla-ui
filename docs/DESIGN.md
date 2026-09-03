@@ -216,6 +216,17 @@ own `#vui-base` element). For this audience — prototypes, where a slot that lo
 zero classes is the entire point — that is a good trade. It would not be for a public library
 styling other people's markup.
 
+**The fourth control is keyed on an element.** A `<summary>` inside a vui container is
+painted as a row — full width, transparent at rest, hover and active from the channel, the
+UA marker replaced by a caret that turns with its `<details>`'s `[open]`. Keyed on the
+element because, unlike a `<button>`, a `<summary>` has exactly one shape it can take here;
+`.vui-summary` is that look outside a container. Its focus ring is drawn inside, like the
+menu item's, because the disclosure box clips itself to its radius. That the row belongs to
+base and not to `components/disclosure.html` is D9's own argument applied a second time: a
+plain `<details>` a consumer drops into a dialog body is markup the factory never sees, and
+CSS reaches it anyway. The lint counts `summary` as a control, so no component can take it
+back.
+
 **The third control is keyed on a role.** A menu item is `<button role="menuitem">` — the
 attribute the menu's keyboard and aria glue need anyway — and inside a vui container that is
 also what paints it. One attribute buys the semantics, the navigation and the look; `.vui-menuitem`
@@ -274,6 +285,42 @@ first item on open, ↑ ↓ Home End, hover-to-focus, Tab closes, `vui:select` w
 contract), and the glue is thirty lines over markup the consumer writes anyway. Items are
 markup, not an `items` array: that is P2, and it is also what keeps a keyed-list reconciler out
 (D8) — the popover queries `[role^="menuitem"]` at keydown time and holds no list state.
+
+### D11 — Disclosure: the platform _is_ the component
+
+The third primitive is the one where "mostly platform" (D8) is nearly literal.
+`<details>`/`<summary>` already give the toggle, the keyboard, `aria-expanded`, the open
+state as an attribute, and find-in-page expanding a closed section to show a hit — so unlike
+the dialog and the popover this component adds **no** aria or keyboard glue at all. What is
+left is a box, an `isOpen` observable and the events out. Three decisions inside that:
+
+- **The accordion is an attribute.** Stuic's Accordion is a group component: a context, a
+  registry of items, a `notifyOpen` that closes the others. `<details name="faq">` is all of
+  that, in the browser — and better, because each view still settles its own state from its
+  own `toggle`, so there is no cross-component wiring to get wrong and a consumer's plain
+  `<details name="faq">` joins the same group without knowing the kit exists. The `name` prop
+  is one `setAttribute`; there is no group component and no `exclusive` flag, and there will
+  not be one.
+
+- **The panel's motion is `::details-content`.** The grid `0fr → 1fr` wrapper (stuic's, and
+  every accordion's before the pseudo-element existed) needs two extra elements and still
+  cannot be addressed from outside. The kit transitions the platform's own pseudo-element:
+  `block-size: 0 → auto` made interpolable by `interpolate-size: allow-keywords`, plus a
+  discrete `content-visibility` transition so the panel stays rendered while it collapses. No
+  wrapper, no measurement, no JS. Support needs no `@supports` and no fallback either: a
+  browser without the pseudo-element drops the rules whole and snaps open — which is what a
+  bare `<details>` does anyway. (Contrast the popover, D10, where the missing feature would
+  have left a _broken_ box, not a plainer one.)
+
+- **The events report a change, not a state.** `toggle` is the single source of truth, as the
+  dialog's `close` and the popover's `toggle` are: `open()`/`close()` mirror it synchronously
+  and every other route — the summary, find-in-page, an exclusive sibling being closed _by_
+  the browser — arrives there. But an `open: true` at creation queues a `toggle` of its own,
+  so the view remembers the state it was created in and stays quiet about it. Nothing fires
+  for a state the consumer wrote.
+
+There is deliberately no `disabled` prop: the platform has no disabled `<details>`, and faking
+one is JS plus CSS for a state a prototype can express by not rendering the section.
 
 ---
 
@@ -352,14 +399,14 @@ path for the `.html` files.
 
 In this order — each one mostly platform:
 
-| # | Component       | Built on                       | Notes                                                                   |
-| - | --------------- | ------------------------------ | ----------------------------------------------------------------------- |
-| 1 | dialog          | `<dialog>`                     | ✅ shipped                                                              |
-| 2 | menu / popover  | Popover API (`popover="auto"`) | ✅ shipped — one `popover` component, `role: "menu"` for the menu (D10) |
-| 3 | disclosure      | `<details>` / `<summary>`      | mostly styling + an `isOpen` observable                                 |
-| 4 | tabs            | roving `tabindex`, aria-tabs   | static panels; no list diffing                                          |
-| 5 | toast           | region + timers                | a leaf; `mount` into a fixed host                                       |
-| — | select/combobox | listbox + keyed options        | **deferred** — needs keyed lists (D8)                                   |
+| # | Component       | Built on                       | Notes                                                                      |
+| - | --------------- | ------------------------------ | -------------------------------------------------------------------------- |
+| 1 | dialog          | `<dialog>`                     | ✅ shipped                                                                 |
+| 2 | menu / popover  | Popover API (`popover="auto"`) | ✅ shipped — one `popover` component, `role: "menu"` for the menu (D10)    |
+| 3 | disclosure      | `<details>` / `<summary>`      | ✅ shipped — `name` is the accordion, `::details-content` the motion (D11) |
+| 4 | tabs            | roving `tabindex`, aria-tabs   | static panels; no list diffing                                             |
+| 5 | toast           | region + timers                | a leaf; `mount` into a fixed host                                          |
+| — | select/combobox | listbox + keyed options        | **deferred** — needs keyed lists (D8)                                      |
 
 ---
 
