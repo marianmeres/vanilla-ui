@@ -130,94 +130,94 @@
 </style>
 
 <script type="module">
-	import {
-		createView,
-		delegate,
-		fromTemplate,
-		mount,
-		observable,
-		refs,
-	} from "@marianmeres/vanilla";
+import {
+	createView,
+	delegate,
+	fromTemplate,
+	mount,
+	observable,
+	refs,
+} from "@marianmeres/vanilla";
 
-	/** Fill a slot from a `Slot` value: text | element | view (mounted + tracked). */
-	function fill(track, slot, content) {
-		if (content == null) return;
-		if (typeof content === "string") slot.textContent = content;
-		else if (content instanceof Node) slot.replaceChildren(content);
-		else mount(track, slot, content);
-	}
+/** Fill a slot from a `Slot` value: text | element | view (mounted + tracked). */
+function fill(track, slot, content) {
+	if (content == null) return;
+	if (typeof content === "string") slot.textContent = content;
+	else if (content instanceof Node) slot.replaceChildren(content);
+	else mount(track, slot, content);
+}
 
-	export function createDisclosure({
-		summary = "",
-		body,
-		open = false,
-		name,
-		onOpen,
-		onClose,
-	} = {}) {
-		return createView((track) => {
-			const el = fromTemplate("tpl-vui-disclosure");
-			const r = refs(el);
-			const isOpen = observable(!!open);
-			// destroy() removes the node; removal fires no `toggle`, so settle the
-			// observable ourselves (no callback — teardown is not a verdict).
-			track(() => isOpen.set(false));
+export function createDisclosure({
+	summary = "",
+	body,
+	open = false,
+	name,
+	onOpen,
+	onClose,
+} = {}) {
+	return createView((track) => {
+		const el = fromTemplate("tpl-vui-disclosure");
+		const r = refs(el);
+		const isOpen = observable(!!open);
+		// destroy() removes the node; removal fires no `toggle`, so settle the
+		// observable ourselves (no callback — teardown is not a verdict).
+		track(() => isOpen.set(false));
 
-			fill(track, r.summary, summary);
-			fill(track, r.body, body);
+		fill(track, r.summary, summary);
+		fill(track, r.body, body);
 
-			// The native exclusive group: same `name`, one open at a time. The
-			// browser closes the others, and each one's own `toggle` settles its
-			// own view — there is no registry here on purpose. Set as an
-			// ATTRIBUTE: it is what the browser reads, IDL property or not.
-			if (name) el.setAttribute("name", name);
-			if (open) el.open = true;
+		// The native exclusive group: same `name`, one open at a time. The
+		// browser closes the others, and each one's own `toggle` settles its
+		// own view — there is no registry here on purpose. Set as an
+		// ATTRIBUTE: it is what the browser reads, IDL property or not.
+		if (name) el.setAttribute("name", name);
+		if (open) el.open = true;
 
-			const api = {
-				el,
-				isOpen,
-				open() {
-					if (el.open) return;
-					el.open = true; // → native "toggle" (async) → `toggled`
-					isOpen.set(true); // mirror el.open, which is already true
+		const api = {
+			el,
+			isOpen,
+			open() {
+				if (el.open) return;
+				el.open = true; // → native "toggle" (async) → `toggled`
+				isOpen.set(true); // mirror el.open, which is already true
+			},
+			close() {
+				if (!el.open) return;
+				el.open = false;
+				isOpen.set(false);
+			},
+			toggle() {
+				el.open ? api.close() : api.open();
+			},
+		};
+
+		// The root itself carries data-on for its own (non-bubbling) `toggle` —
+		// delegate listens on the root, so it sees it. That event is the single
+		// source of truth: the summary, open()/close(), find-in-page and a
+		// sibling in the same `name` group all arrive here and nowhere else.
+		let last = isOpen.get();
+		track(
+			delegate(el, {
+				toggled: () => {
+					const isNowOpen = el.open;
+					isOpen.set(isNowOpen);
+					// Report a CHANGE, not a state: `open: true` at creation queues
+					// a toggle of its own, and nothing should fire for the state the
+					// view was created in.
+					if (isNowOpen === last) return;
+					last = isNowOpen;
+					(isNowOpen ? onOpen : onClose)?.();
+					el.dispatchEvent(
+						new CustomEvent(isNowOpen ? "vui:open" : "vui:close", {
+							bubbles: true,
+							detail: { open: isNowOpen },
+						}),
+					);
 				},
-				close() {
-					if (!el.open) return;
-					el.open = false;
-					isOpen.set(false);
-				},
-				toggle() {
-					el.open ? api.close() : api.open();
-				},
-			};
+			}),
+		);
 
-			// The root itself carries data-on for its own (non-bubbling) `toggle` —
-			// delegate listens on the root, so it sees it. That event is the single
-			// source of truth: the summary, open()/close(), find-in-page and a
-			// sibling in the same `name` group all arrive here and nowhere else.
-			let last = isOpen.get();
-			track(
-				delegate(el, {
-					toggled: () => {
-						const isNowOpen = el.open;
-						isOpen.set(isNowOpen);
-						// Report a CHANGE, not a state: `open: true` at creation queues
-						// a toggle of its own, and nothing should fire for the state the
-						// view was created in.
-						if (isNowOpen === last) return;
-						last = isNowOpen;
-						(isNowOpen ? onOpen : onClose)?.();
-						el.dispatchEvent(
-							new CustomEvent(isNowOpen ? "vui:open" : "vui:close", {
-								bubbles: true,
-								detail: { open: isNowOpen },
-							}),
-						);
-					},
-				}),
-			);
-
-			return api;
-		});
-	}
+		return api;
+	});
+}
 </script>

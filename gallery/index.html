@@ -24,7 +24,7 @@
 			belongs: under everything. (See the reboot picker below.)
 		-->
 		<style>
-			@layer reset, vui.base, vui.components;
+		@layer reset, vui.base, vui.components;
 		</style>
 
 		<!--
@@ -63,147 +63,144 @@
 			imports "@marianmeres/vanilla-ui" (which re-exports vanilla) — one copy.
 		-->
 		<script type="importmap">
-			{
-				"imports": {
-					"@marianmeres/vanilla": "../dist/mod.js",
-					"@marianmeres/vanilla-ui": "../dist/mod.js"
-				}
+		{
+			"imports": {
+				"@marianmeres/vanilla": "../dist/mod.js",
+				"@marianmeres/vanilla-ui": "../dist/mod.js"
 			}
+		}
 		</script>
 
 		<!-- restore theme + light/dark + reboot mode BEFORE first paint (no flash) -->
 		<script>
-			// also used by the picker below — one place that knows the three modes
-			function vuiApplyReboot(mode) {
-				document.getElementById("reboot-css").textContent =
-					mode === "layered"
-						? '@import url("./reboot.css") layer(reset);'
-						: mode === "unlayered"
-							? '@import url("./reboot.css");'
-							: "";
+		// also used by the picker below — one place that knows the three modes
+		function vuiApplyReboot(mode) {
+			document.getElementById("reboot-css").textContent = mode === "layered"
+				? '@import url("./reboot.css") layer(reset);'
+				: mode === "unlayered"
+				? '@import url("./reboot.css");'
+				: "";
+		}
+		(function () {
+			var saved = null;
+			try {
+				saved = JSON.parse(
+					localStorage.getItem("vui-gallery-theme") || "null",
+				);
+			} catch (_) {}
+			var dark = saved ? !!saved.dark : matchMedia("(prefers-color-scheme: dark)").matches;
+			document.documentElement.classList.toggle("dark", dark);
+			if (saved && saved.file) {
+				document
+					.getElementById("theme-link")
+					.setAttribute("href", "./themes/" + saved.file);
 			}
-			(function () {
-				var saved = null;
-				try {
-					saved = JSON.parse(
-						localStorage.getItem("vui-gallery-theme") || "null",
-					);
-				} catch (_) {}
-				var dark = saved
-					? !!saved.dark
-					: matchMedia("(prefers-color-scheme: dark)").matches;
-				document.documentElement.classList.toggle("dark", dark);
-				if (saved && saved.file) {
-					document
-						.getElementById("theme-link")
-						.setAttribute("href", "./themes/" + saved.file);
-				}
-				vuiApplyReboot((saved && saved.reboot) || "off");
-			})();
+			vuiApplyReboot((saved && saved.reboot) || "off");
+		})();
 		</script>
 
 		<style>
-			/* Gallery chrome only — components bring their own @scope'd styles. */
-			:root {
-				color-scheme: light;
-				font-family:
-					system-ui,
-					-apple-system,
-					"Segoe UI",
-					Roboto,
-					sans-serif;
-			}
-			:root.dark {
-				color-scheme: dark;
-			}
-			body {
-				margin: 0;
-				background: var(--vui-color-background, Canvas);
-				color: var(--vui-color-foreground, CanvasText);
-				line-height: 1.5;
-			}
-			.wrap {
-				max-width: 52rem;
-				margin: 0 auto;
-				padding: 2rem 1.25rem 4rem;
-			}
-			header.top {
+		/* Gallery chrome only — components bring their own @scope'd styles. */
+		:root {
+			color-scheme: light;
+			font-family:
+				system-ui,
+				-apple-system,
+				"Segoe UI",
+				Roboto,
+				sans-serif;
+		}
+		:root.dark {
+			color-scheme: dark;
+		}
+		body {
+			margin: 0;
+			background: var(--vui-color-background, Canvas);
+			color: var(--vui-color-foreground, CanvasText);
+			line-height: 1.5;
+		}
+		.wrap {
+			max-width: 52rem;
+			margin: 0 auto;
+			padding: 2rem 1.25rem 4rem;
+		}
+		header.top {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 1rem;
+			flex-wrap: wrap;
+			margin-bottom: 2rem;
+		}
+		header.top h1 {
+			margin: 0;
+			font-size: 1.5rem;
+		}
+		header.top p {
+			margin: 0.25rem 0 0;
+			color: var(--vui-muted-fg);
+		}
+		.controls {
+			display: flex;
+			gap: 0.5rem;
+			align-items: center;
+		}
+		section.component {
+			padding: 1.5rem;
+			margin-bottom: 1.5rem;
+			border: 1px solid var(--vui-border);
+			border-radius: 0.75rem;
+			background: var(--vui-muted);
+		}
+		section.component h2 {
+			margin: 0 0 0.25rem;
+			font-size: 1.125rem;
+		}
+		section.component > p {
+			margin: 0 0 1rem;
+			color: var(--vui-muted-fg);
+			font-size: 0.925rem;
+		}
+		/* NO button / input / focus-ring rules here any more: they are the kit's
+		  (components/base.css), and a gallery that redefined them would be
+		  testing itself instead of what ships. Layout only, from here down. */
+		.stack > * + * {
+			margin-top: 1rem;
+		}
+		pre.log {
+			margin: 0;
+			padding: 0.75rem 1rem;
+			min-height: 3.5rem;
+			max-height: 12rem;
+			overflow: auto;
+			font-size: 0.8rem;
+			border-radius: var(--vui-radius);
+			background: var(--vui-bg);
+			color: var(--vui-fg);
+			border: 1px solid var(--vui-border);
+		}
+		pre.log:empty::before {
+			content: "events will show up here…";
+			color: var(--vui-muted-fg);
+		}
+		/* the nested demo component (also styled via @scope, like a real one) */
+		@scope (.demo-counter) {
+			:scope {
 				display: flex;
 				align-items: center;
-				justify-content: space-between;
-				gap: 1rem;
-				flex-wrap: wrap;
-				margin-bottom: 2rem;
-			}
-			header.top h1 {
-				margin: 0;
-				font-size: 1.5rem;
-			}
-			header.top p {
-				margin: 0.25rem 0 0;
-				color: var(--vui-muted-fg);
-			}
-			.controls {
-				display: flex;
-				gap: 0.5rem;
-				align-items: center;
-			}
-			section.component {
-				padding: 1.5rem;
-				margin-bottom: 1.5rem;
-				border: 1px solid var(--vui-border);
-				border-radius: 0.75rem;
-				background: var(--vui-muted);
-			}
-			section.component h2 {
-				margin: 0 0 0.25rem;
-				font-size: 1.125rem;
-			}
-			section.component > p {
-				margin: 0 0 1rem;
-				color: var(--vui-muted-fg);
-				font-size: 0.925rem;
-			}
-			/* NO button / input / focus-ring rules here any more: they are the kit's
-		   (components/base.css), and a gallery that redefined them would be
-		   testing itself instead of what ships. Layout only, from here down. */
-			.stack > * + * {
-				margin-top: 1rem;
-			}
-			pre.log {
-				margin: 0;
+				gap: 0.75rem;
 				padding: 0.75rem 1rem;
-				min-height: 3.5rem;
-				max-height: 12rem;
-				overflow: auto;
-				font-size: 0.8rem;
-				border-radius: var(--vui-radius);
-				background: var(--vui-bg);
-				color: var(--vui-fg);
-				border: 1px solid var(--vui-border);
+				margin-top: 1rem;
+				border-radius: 0.5rem;
+				border: 1px dashed var(--vui-border);
 			}
-			pre.log:empty::before {
-				content: "events will show up here…";
-				color: var(--vui-muted-fg);
+			output {
+				font-variant-numeric: tabular-nums;
+				font-weight: 600;
+				min-width: 2ch;
+				text-align: center;
 			}
-			/* the nested demo component (also styled via @scope, like a real one) */
-			@scope (.demo-counter) {
-				:scope {
-					display: flex;
-					align-items: center;
-					gap: 0.75rem;
-					padding: 0.75rem 1rem;
-					margin-top: 1rem;
-					border-radius: 0.5rem;
-					border: 1px dashed var(--vui-border);
-				}
-				output {
-					font-variant-numeric: tabular-nums;
-					font-weight: 600;
-					min-width: 2ch;
-					text-align: center;
-				}
-			}
+		}
 		</style>
 	</head>
 	<body>
@@ -800,541 +797,532 @@
 		</template>
 
 		<script type="module">
-			import {
-				button,
-				createView,
-				delegate,
-				enhance,
-				fromTemplate,
-				loadAll,
-				observable,
-				refs,
-			} from "@marianmeres/vanilla-ui";
+		import {
+			button,
+			createView,
+			delegate,
+			enhance,
+			fromTemplate,
+			loadAll,
+			observable,
+			refs,
+		} from "@marianmeres/vanilla-ui";
 
-			/* ---- theme picker + dark toggle (gallery chrome) ------------------- */
-			const THEMES = [
-				"zinc",
-				"slateTealOcean",
-				"indigoAmber",
-				"emeraldPink",
-				"monokaiGreen",
-				"redSky",
-			];
-			const toKebab = (s) => s.replace(/([A-Z])/g, "-$1").toLowerCase();
-			const link = document.getElementById("theme-link");
-			const select = document.getElementById("theme-select");
-			const rebootSelect = document.getElementById("reboot-select");
-			for (const name of THEMES) {
-				const o = document.createElement("option");
-				o.value = `${toKebab(name)}.css`;
-				o.textContent = name;
-				select.append(o);
-			}
-			select.value = link.getAttribute("href").split("/").pop();
-			// the pre-paint script already applied the saved mode; mirror it here
-			rebootSelect.value =
-				document
-					.getElementById("reboot-css")
-					.textContent.includes("layer(reset)")
-					? "layered"
-					: document.getElementById("reboot-css").textContent.trim()
-						? "unlayered"
-						: "off";
-			const persist = () =>
-				localStorage.setItem(
-					"vui-gallery-theme",
-					JSON.stringify({
-						file: select.value,
-						reboot: rebootSelect.value,
-						dark: document.documentElement.classList.contains(
-							"dark",
-						),
+		/* ---- theme picker + dark toggle (gallery chrome) ------------------- */
+		const THEMES = [
+			"zinc",
+			"slateTealOcean",
+			"indigoAmber",
+			"emeraldPink",
+			"monokaiGreen",
+			"redSky",
+		];
+		const toKebab = (s) => s.replace(/([A-Z])/g, "-$1").toLowerCase();
+		const link = document.getElementById("theme-link");
+		const select = document.getElementById("theme-select");
+		const rebootSelect = document.getElementById("reboot-select");
+		for (const name of THEMES) {
+			const o = document.createElement("option");
+			o.value = `${toKebab(name)}.css`;
+			o.textContent = name;
+			select.append(o);
+		}
+		select.value = link.getAttribute("href").split("/").pop();
+		// the pre-paint script already applied the saved mode; mirror it here
+		rebootSelect.value = document
+				.getElementById("reboot-css")
+				.textContent.includes("layer(reset)")
+			? "layered"
+			: document.getElementById("reboot-css").textContent.trim()
+			? "unlayered"
+			: "off";
+		const persist = () =>
+			localStorage.setItem(
+				"vui-gallery-theme",
+				JSON.stringify({
+					file: select.value,
+					reboot: rebootSelect.value,
+					dark: document.documentElement.classList.contains(
+						"dark",
+					),
+				}),
+			);
+		select.addEventListener("change", () => {
+			link.setAttribute("href", `./themes/${select.value}`);
+			persist();
+		});
+		rebootSelect.addEventListener("change", () => {
+			vuiApplyReboot(rebootSelect.value);
+			persist();
+		});
+		document
+			.getElementById("dark-toggle")
+			.addEventListener("click", () => {
+				document.documentElement.classList.toggle("dark");
+				persist();
+			});
+
+		/* ---- load the kit: ONE await, then mount at will -------------------- */
+		const ui = await loadAll();
+
+		/* ---- a nested demo component (gallery-local) ------------------------ */
+		function createCounter() {
+			return createView((track) => {
+				const el = fromTemplate("tpl-gallery-counter");
+				const r = refs(el);
+				const n = observable(0);
+				track(n.subscribe((v) => (r.value.value = String(v))));
+				track(
+					delegate(el, {
+						inc: () => n.update((v) => v + 1),
+						dec: () => n.update((v) => v - 1),
+						close: () => n.set(0), // same action NAME as the dialog's ✕ — no collision
 					}),
 				);
-			select.addEventListener("change", () => {
-				link.setAttribute("href", `./themes/${select.value}`);
-				persist();
+				return { el };
 			});
-			rebootSelect.addEventListener("change", () => {
-				vuiApplyReboot(rebootSelect.value);
-				persist();
-			});
-			document
-				.getElementById("dark-toggle")
-				.addEventListener("click", () => {
-					document.documentElement.classList.toggle("dark");
-					persist();
+		}
+
+		/* ---- dialog section ------------------------------------------------- */
+		enhance("#dialog", (el, track) => {
+			const r = refs(el);
+			const log = (line) => {
+				r.log.textContent += (r.log.textContent ? "\n" : "") + line;
+				r.log.scrollTop = r.log.scrollHeight;
+			};
+
+			// Open a dialog, log its close, and destroy it afterwards — a
+			// throwaway per open keeps the demo stateless. (A real app would
+			// usually create one and open()/close() it repeatedly.)
+			const show = (label, props) => {
+				const dlg = ui.createDialog({
+					...props,
+					onClose: (v) => log(`${label} → onClose("${v}")`),
 				});
+				dlg.el.addEventListener("vui:close", (e) => {
+					log(
+						`${label} → vui:close  detail=${JSON.stringify(e.detail)}`,
+					);
+					dlg.destroy();
+				});
+				document.body.append(dlg.el);
+				dlg.open();
+				return dlg;
+			};
 
-			/* ---- load the kit: ONE await, then mount at will -------------------- */
-			const ui = await loadAll();
+			// footers are built in JS, so they use the kit's element helper — the
+			// same .vui-btn classes hand-written markup would use, no second look
+			const footerButtons = (dlg, ...defs) => {
+				const box = document.createElement("div");
+				box.className = "vui-row";
+				box.append(
+					...defs.map(([text, value, variant]) =>
+						button(text, {
+							variant,
+							onClick: () => dlg().close(value),
+						})
+					),
+				);
+				return box;
+			};
 
-			/* ---- a nested demo component (gallery-local) ------------------------ */
-			function createCounter() {
-				return createView((track) => {
-					const el = fromTemplate("tpl-gallery-counter");
-					const r = refs(el);
-					const n = observable(0);
-					track(n.subscribe((v) => (r.value.value = String(v))));
-					track(
-						delegate(el, {
-							inc: () => n.update((v) => v + 1),
-							dec: () => n.update((v) => v - 1),
-							close: () => n.set(0), // same action NAME as the dialog's ✕ — no collision
+			track(
+				delegate(el, {
+					basic: () =>
+						show("basic", {
+							title: "Hello",
+							body: "A plain-text body. Close me with ✕, Esc, or the backdrop.",
 						}),
-					);
-					return { el };
+
+					confirm: () => {
+						let dlg;
+						dlg = show("confirm", {
+							title: "Delete 3 items?",
+							body: "This cannot be undone.",
+							closeOnBackdrop: false,
+							footer: footerButtons(
+								() => dlg,
+								["Keep", "keep"],
+								["Delete", "delete", "destructive"],
+							),
+						});
+					},
+
+					form: () =>
+						show("form", {
+							title: "Sign up",
+							body: fromTemplate("tpl-gallery-form"),
+						}),
+
+					nested: () =>
+						show("nested", {
+							title: "A child view inside",
+							body: createCounter(), // a VIEW: mounted + destroyed with the dialog
+						}),
+
+					nonmodal: () =>
+						show("non-modal", {
+							title: "Non-modal",
+							body: "No backdrop, no focus trap — the page stays interactive.",
+							modal: false,
+						}),
+
+					long: () => {
+						const node = fromTemplate("tpl-gallery-long");
+						refs(node).p.textContent = "Lorem ipsum dolor sit amet. ".repeat(160);
+						show("long", {
+							title: "Scrolling body",
+							body: node,
+						});
+					},
+				}),
+			);
+		});
+
+		/* ---- popover section ------------------------------------------------ */
+		enhance("#popover", (el, track) => {
+			const r = refs(el);
+			const log = (line) => {
+				r.log.textContent += (r.log.textContent ? "\n" : "") + line;
+				r.log.scrollTop = r.log.scrollHeight;
+			};
+
+			// Popovers are created ONCE and toggled by their anchors: the
+			// factory inserts `el` right after the anchor, and a <button>
+			// anchor is the native invoker, so nothing else is wired here.
+			const pop = (label, props) => {
+				const p = ui.createPopover({
+					...props,
+					onOpen: () => log(`${label} → vui:open`),
+					onClose: () => log(`${label} → vui:close`),
+					onSelect: (value) => log(`${label} → vui:select "${value}"`),
 				});
+				track(() => p.destroy());
+				return p;
+			};
+
+			pop("menu", {
+				anchor: r.menuBtn,
+				role: "menu",
+				body: fromTemplate("tpl-gallery-menu"),
+			});
+
+			pop("text", {
+				anchor: r.textBtn,
+				body: "Plain text. Click outside, or press Esc, to dismiss.",
+			});
+
+			// a form: bare controls lifted by the surface. Submit and cancel
+			// are wired by hand — the popover is a scope of its own, so this
+			// section's delegate would not see a data-on inside it.
+			const form = fromTemplate("tpl-gallery-popover-form");
+			const formPop = pop("form", {
+				anchor: r.formBtn,
+				body: form,
+				placement: "bottom-end",
+			});
+			form.addEventListener("submit", (e) => {
+				e.preventDefault();
+				const data = Object.fromEntries(new FormData(form));
+				log(`form → submit ${JSON.stringify(data)}`);
+				form.reset();
+				formPop.close();
+			});
+			refs(form).cancel.addEventListener("click", () => formPop.close());
+
+			// nested: the inner menu's anchor lives inside the outer popover
+			const outer = fromTemplate("tpl-gallery-popover-outer");
+			pop("outer", { anchor: r.outerBtn, body: outer, placement: "bottom" });
+			pop("inner", {
+				anchor: refs(outer).inner,
+				role: "menu",
+				body: fromTemplate("tpl-gallery-menu"),
+			});
+
+			// every placement on a button() each — the same text, the same
+			// anchor, only the preferred side differs
+			for (
+				const placement of [
+					"bottom-start",
+					"bottom",
+					"bottom-end",
+					"top-start",
+					"top",
+					"top-end",
+					"left",
+					"right",
+				]
+			) {
+				const anchor = button(placement, { variant: "ghost" });
+				r.placements.append(anchor);
+				pop(placement, { anchor, body: placement, placement });
 			}
 
-			/* ---- dialog section ------------------------------------------------- */
-			enhance("#dialog", (el, track) => {
-				const r = refs(el);
-				const log = (line) => {
-					r.log.textContent += (r.log.textContent ? "\n" : "") + line;
-					r.log.scrollTop = r.log.scrollHeight;
-				};
+			// a menu inside a modal dialog: both in the top layer, the
+			// popover above the dialog (later in, higher up)
+			track(
+				delegate(el, {
+					inDialog: () => {
+						const body = document.createElement("div");
+						const trigger = button("actions ▾");
+						body.append("A menu button inside a modal dialog. ", trigger);
+						const dlg = ui.createDialog({
+							title: "Popover in a dialog",
+							body,
+							onClose: (v) => {
+								log(`dialog → onClose("${v}")`);
+								dlg.destroy();
+							},
+						});
+						document.body.append(dlg.el);
+						// created once the anchor is in the document, so the popover
+						// lands next to it — inside the dialog, and gone with it
+						ui.createPopover({
+							anchor: trigger,
+							role: "menu",
+							body: fromTemplate("tpl-gallery-menu"),
+							onSelect: (value) => log(`dialog menu → vui:select "${value}"`),
+						});
+						dlg.open();
+					},
+				}),
+			);
+		});
 
-				// Open a dialog, log its close, and destroy it afterwards — a
-				// throwaway per open keeps the demo stateless. (A real app would
-				// usually create one and open()/close() it repeatedly.)
-				const show = (label, props) => {
-					const dlg = ui.createDialog({
-						...props,
-						onClose: (v) => log(`${label} → onClose("${v}")`),
-					});
-					dlg.el.addEventListener("vui:close", (e) => {
-						log(
-							`${label} → vui:close  detail=${JSON.stringify(e.detail)}`,
-						);
-						dlg.destroy();
-					});
-					document.body.append(dlg.el);
-					dlg.open();
-					return dlg;
-				};
+		/* ---- disclosure section --------------------------------------------- */
+		enhance("#disclosure", (el, track) => {
+			const r = refs(el);
+			const log = (line) => {
+				r.log.textContent += (r.log.textContent ? "\n" : "") + line;
+				r.log.scrollTop = r.log.scrollHeight;
+			};
 
-				// footers are built in JS, so they use the kit's element helper — the
-				// same .vui-btn classes hand-written markup would use, no second look
-				const footerButtons = (dlg, ...defs) => {
-					const box = document.createElement("div");
-					box.className = "vui-row";
-					box.append(
-						...defs.map(([text, value, variant]) =>
-							button(text, {
-								variant,
-								onClick: () => dlg().close(value),
-							}),
-						),
-					);
-					return box;
-				};
+			// Unlike the dialogs above, these are created ONCE and kept: a
+			// disclosure IS its state, and there is nothing to throw away
+			// between opens.
+			const all = [];
+			const add = (slot, props) => {
+				const d = ui.createDisclosure({
+					...props,
+					onOpen: () => log(`${props.summary} → vui:open`),
+					onClose: () => log(`${props.summary} → vui:close`),
+				});
+				slot.append(d.el);
+				all.push(d);
+				track(() => d.destroy());
+				return d;
+			};
 
-				track(
-					delegate(el, {
-						basic: () =>
-							show("basic", {
-								title: "Hello",
-								body: "A plain-text body. Close me with ✕, Esc, or the backdrop.",
-							}),
+			add(r.basics, {
+				summary: "What does the component add?",
+				body: "The box, the caret, the height animation, an isOpen " +
+					"observable and the events out. Everything else — the " +
+					"toggle, the keyboard, aria-expanded, find-in-page — is " +
+					"the browser's.",
+			});
+			add(r.basics, {
+				summary: "Open by default, with a panel of markup",
+				open: true,
+				body: fromTemplate("tpl-gallery-disclosure-panel"),
+			});
+			// a VIEW slot: mounted, and destroyed with the disclosure
+			add(r.basics, {
+				summary: "A child view inside (data-scope)",
+				body: createCounter(),
+			});
 
-						confirm: () => {
-							let dlg;
-							dlg = show("confirm", {
-								title: "Delete 3 items?",
-								body: "This cannot be undone.",
-								closeOnBackdrop: false,
-								footer: footerButtons(
-									() => dlg,
-									["Keep", "keep"],
-									["Delete", "delete", "destructive"],
+			// the accordion: one `name`, and the platform keeps one open
+			for (
+				const [summary, body] of [
+					["Shipping", "Free over €50. Two to four working days."],
+					["Returns", "Thirty days, no questions, no restocking fee."],
+					["Warranty", "Two years on everything, three on the frame."],
+				]
+			) {
+				add(r.group, { summary, body, name: "gallery-accordion" });
+			}
+
+			track(
+				delegate(el, {
+					// on the exclusive group this is the platform's own answer:
+					// each open closes the last one standing
+					openAll: () => all.forEach((d) => d.open()),
+					closeAll: () => all.forEach((d) => d.close()),
+
+					inDialog: () => {
+						const dlg = ui.createDialog({
+							title: "Advanced settings",
+							body: ui.createDisclosure({
+								summary: "Show the fine print",
+								body: fromTemplate(
+									"tpl-gallery-disclosure-panel",
 								),
-							});
-						},
+								onOpen: () => log("in dialog → vui:open"),
+								onClose: () => log("in dialog → vui:close"),
+							}), // a VIEW: destroyed with the dialog
+							onClose: () => dlg.destroy(),
+						});
+						document.body.append(dlg.el);
+						dlg.open();
+					},
+				}),
+			);
+		});
 
-						form: () =>
-							show("form", {
-								title: "Sign up",
-								body: fromTemplate("tpl-gallery-form"),
-							}),
+		/* ---- tabs section ---------------------------------------------------- */
+		enhance("#tabs", (el, track) => {
+			const r = refs(el);
+			const log = (line) => {
+				r.log.textContent += (r.log.textContent ? "\n" : "") + line;
+				r.log.scrollTop = r.log.scrollHeight;
+			};
 
-						nested: () =>
-							show("nested", {
-								title: "A child view inside",
-								body: createCounter(), // a VIEW: mounted + destroyed with the dialog
-							}),
+			// Like the disclosures, and unlike the dialogs: created once and
+			// kept. The panels are static — that is the whole bargain (no list
+			// diffing, so no reconciler in vanilla).
+			const add = (slot, label, props) => {
+				const t = ui.createTabs({
+					ariaLabel: label,
+					...props,
+					onSelect: (value) => log(`${label} → vui:select "${value}"`),
+				});
+				slot.append(t.el);
+				track(() => t.destroy());
+				return t;
+			};
 
-						nonmodal: () =>
-							show("non-modal", {
-								title: "Non-modal",
-								body: "No backdrop, no focus trap — the page stays interactive.",
-								modal: false,
-							}),
-
-						long: () => {
-							const node = fromTemplate("tpl-gallery-long");
-							refs(node).p.textContent =
-								"Lorem ipsum dolor sit amet. ".repeat(160);
-							show("long", {
-								title: "Scrolling body",
-								body: node,
-							});
-						},
-					}),
-				);
+			const values = ["overview", "markup", "findable", "view", "soon"];
+			const basics = add(r.basics, "basics", {
+				tabs: [
+					{
+						value: "overview",
+						label: "Overview",
+						panel: "The strip is a role, the panels are static, and the " +
+							"selection is one observable. Arrow through the tabs: " +
+							"selection follows focus, which is the ARIA pattern's " +
+							"default for panels this cheap.",
+					},
+					{
+						value: "markup",
+						label: "Markup",
+						panel: fromTemplate("tpl-gallery-tabs-panel"),
+					},
+					{
+						value: "findable",
+						label: "Findable",
+						panel: fromTemplate("tpl-gallery-tabs-findable"),
+					},
+					// a VIEW slot: mounted, and destroyed with the tabs
+					{
+						value: "view",
+						label: "A child view",
+						panel: createCounter(),
+					},
+					{
+						value: "soon",
+						label: "Disabled",
+						disabled: true,
+						panel: "Not reachable — and its panel is plainly hidden, not " +
+							"findable: a find-in-page hit in here would reveal a " +
+							"panel no tab can select.",
+					},
+				],
 			});
 
-			/* ---- popover section ------------------------------------------------ */
-			enhance("#popover", (el, track) => {
-				const r = refs(el);
-				const log = (line) => {
-					r.log.textContent += (r.log.textContent ? "\n" : "") + line;
-					r.log.scrollTop = r.log.scrollHeight;
-				};
-
-				// Popovers are created ONCE and toggled by their anchors: the
-				// factory inserts `el` right after the anchor, and a <button>
-				// anchor is the native invoker, so nothing else is wired here.
-				const pop = (label, props) => {
-					const p = ui.createPopover({
-						...props,
-						onOpen: () => log(`${label} → vui:open`),
-						onClose: () => log(`${label} → vui:close`),
-						onSelect: (value) => log(`${label} → vui:select "${value}"`),
-					});
-					track(() => p.destroy());
-					return p;
-				};
-
-				pop("menu", {
-					anchor: r.menuBtn,
-					role: "menu",
-					body: fromTemplate("tpl-gallery-menu"),
-				});
-
-				pop("text", {
-					anchor: r.textBtn,
-					body: "Plain text. Click outside, or press Esc, to dismiss.",
-				});
-
-				// a form: bare controls lifted by the surface. Submit and cancel
-				// are wired by hand — the popover is a scope of its own, so this
-				// section's delegate would not see a data-on inside it.
-				const form = fromTemplate("tpl-gallery-popover-form");
-				const formPop = pop("form", {
-					anchor: r.formBtn,
-					body: form,
-					placement: "bottom-end",
-				});
-				form.addEventListener("submit", (e) => {
-					e.preventDefault();
-					const data = Object.fromEntries(new FormData(form));
-					log(`form → submit ${JSON.stringify(data)}`);
-					form.reset();
-					formPop.close();
-				});
-				refs(form).cancel.addEventListener("click", () => formPop.close());
-
-				// nested: the inner menu's anchor lives inside the outer popover
-				const outer = fromTemplate("tpl-gallery-popover-outer");
-				pop("outer", { anchor: r.outerBtn, body: outer, placement: "bottom" });
-				pop("inner", {
-					anchor: refs(outer).inner,
-					role: "menu",
-					body: fromTemplate("tpl-gallery-menu"),
-				});
-
-				// every placement on a button() each — the same text, the same
-				// anchor, only the preferred side differs
-				for (
-					const placement of [
-						"bottom-start",
-						"bottom",
-						"bottom-end",
-						"top-start",
-						"top",
-						"top-end",
-						"left",
-						"right",
-					]
-				) {
-					const anchor = button(placement, { variant: "ghost" });
-					r.placements.append(anchor);
-					pop(placement, { anchor, body: placement, placement });
-				}
-
-				// a menu inside a modal dialog: both in the top layer, the
-				// popover above the dialog (later in, higher up)
-				track(
-					delegate(el, {
-						inDialog: () => {
-							const body = document.createElement("div");
-							const trigger = button("actions ▾");
-							body.append("A menu button inside a modal dialog. ", trigger);
-							const dlg = ui.createDialog({
-								title: "Popover in a dialog",
-								body,
-								onClose: (v) => {
-									log(`dialog → onClose("${v}")`);
-									dlg.destroy();
-								},
-							});
-							document.body.append(dlg.el);
-							// created once the anchor is in the document, so the popover
-							// lands next to it — inside the dialog, and gone with it
-							ui.createPopover({
-								anchor: trigger,
-								role: "menu",
-								body: fromTemplate("tpl-gallery-menu"),
-								onSelect: (value) =>
-									log(`dialog menu → vui:select "${value}"`),
-							});
-							dlg.open();
-						},
-					}),
-				);
+			add(r.manual, "manual", {
+				activation: "manual",
+				tabs: [
+					{ value: "one", label: "First", panel: "Arrowed to, then chosen." },
+					{
+						value: "two",
+						label: "Second",
+						panel: "Nothing loaded on the way here.",
+					},
+					{
+						value: "three",
+						label: "Third",
+						panel: "Enter and Space are the button's own.",
+					},
+				],
 			});
 
-			/* ---- disclosure section --------------------------------------------- */
-			enhance("#disclosure", (el, track) => {
-				const r = refs(el);
-				const log = (line) => {
-					r.log.textContent += (r.log.textContent ? "\n" : "") + line;
-					r.log.scrollTop = r.log.scrollHeight;
-				};
-
-				// Unlike the dialogs above, these are created ONCE and kept: a
-				// disclosure IS its state, and there is nothing to throw away
-				// between opens.
-				const all = [];
-				const add = (slot, props) => {
-					const d = ui.createDisclosure({
-						...props,
-						onOpen: () => log(`${props.summary} → vui:open`),
-						onClose: () => log(`${props.summary} → vui:close`),
-					});
-					slot.append(d.el);
-					all.push(d);
-					track(() => d.destroy());
-					return d;
-				};
-
-				add(r.basics, {
-					summary: "What does the component add?",
-					body:
-						"The box, the caret, the height animation, an isOpen " +
-						"observable and the events out. Everything else — the " +
-						"toggle, the keyboard, aria-expanded, find-in-page — is " +
-						"the browser's.",
-				});
-				add(r.basics, {
-					summary: "Open by default, with a panel of markup",
-					open: true,
-					body: fromTemplate("tpl-gallery-disclosure-panel"),
-				});
-				// a VIEW slot: mounted, and destroyed with the disclosure
-				add(r.basics, {
-					summary: "A child view inside (data-scope)",
-					body: createCounter(),
-				});
-
-				// the accordion: one `name`, and the platform keeps one open
-				for (
-					const [summary, body] of [
-						["Shipping", "Free over €50. Two to four working days."],
-						["Returns", "Thirty days, no questions, no restocking fee."],
-						["Warranty", "Two years on everything, three on the frame."],
-					]
-				) {
-					add(r.group, { summary, body, name: "gallery-accordion" });
-				}
-
-				track(
-					delegate(el, {
-						// on the exclusive group this is the platform's own answer:
-						// each open closes the last one standing
-						openAll: () => all.forEach((d) => d.open()),
-						closeAll: () => all.forEach((d) => d.close()),
-
-						inDialog: () => {
-							const dlg = ui.createDialog({
-								title: "Advanced settings",
-								body: ui.createDisclosure({
-									summary: "Show the fine print",
-									body: fromTemplate(
-										"tpl-gallery-disclosure-panel",
-									),
-									onOpen: () => log("in dialog → vui:open"),
-									onClose: () => log("in dialog → vui:close"),
-								}), // a VIEW: destroyed with the dialog
-								onClose: () => dlg.destroy(),
-							});
-							document.body.append(dlg.el);
-							dlg.open();
-						},
-					}),
-				);
+			add(r.vertical, "vertical", {
+				orientation: "vertical",
+				tabs: [
+					{
+						value: "account",
+						label: "Account",
+						panel: "The rail runs the height of the row.",
+					},
+					{
+						value: "billing",
+						label: "Billing",
+						panel: "↑ ↓ move; ← → are left to the page.",
+					},
+					{ value: "api", label: "API keys", panel: "Same component, one prop." },
+				],
 			});
 
-			/* ---- tabs section ---------------------------------------------------- */
-			enhance("#tabs", (el, track) => {
-				const r = refs(el);
-				const log = (line) => {
-					r.log.textContent += (r.log.textContent ? "\n" : "") + line;
-					r.log.scrollTop = r.log.scrollHeight;
-				};
-
-				// Like the disclosures, and unlike the dialogs: created once and
-				// kept. The panels are static — that is the whole bargain (no list
-				// diffing, so no reconciler in vanilla).
-				const add = (slot, label, props) => {
-					const t = ui.createTabs({
-						ariaLabel: label,
-						...props,
-						onSelect: (value) =>
-							log(`${label} → vui:select "${value}"`),
-					});
-					slot.append(t.el);
-					track(() => t.destroy());
-					return t;
-				};
-
-				const values = ["overview", "markup", "findable", "view", "soon"];
-				const basics = add(r.basics, "basics", {
-					tabs: [
-						{
-							value: "overview",
-							label: "Overview",
-							panel:
-								"The strip is a role, the panels are static, and the " +
-								"selection is one observable. Arrow through the tabs: " +
-								"selection follows focus, which is the ARIA pattern's " +
-								"default for panels this cheap.",
-						},
-						{
-							value: "markup",
-							label: "Markup",
-							panel: fromTemplate("tpl-gallery-tabs-panel"),
-						},
-						{
-							value: "findable",
-							label: "Findable",
-							panel: fromTemplate("tpl-gallery-tabs-findable"),
-						},
-						// a VIEW slot: mounted, and destroyed with the tabs
-						{
-							value: "view",
-							label: "A child view",
-							panel: createCounter(),
-						},
-						{
-							value: "soon",
-							label: "Disabled",
-							disabled: true,
-							panel:
-								"Not reachable — and its panel is plainly hidden, not " +
-								"findable: a find-in-page hit in here would reveal a " +
-								"panel no tab can select.",
-						},
-					],
-				});
-
-				add(r.manual, "manual", {
-					activation: "manual",
-					tabs: [
-						{ value: "one", label: "First", panel: "Arrowed to, then chosen." },
-						{
-							value: "two",
-							label: "Second",
-							panel: "Nothing loaded on the way here.",
-						},
-						{
-							value: "three",
-							label: "Third",
-							panel: "Enter and Space are the button's own.",
-						},
-					],
-				});
-
-				add(r.vertical, "vertical", {
-					orientation: "vertical",
-					tabs: [
-						{
-							value: "account",
-							label: "Account",
-							panel: "The rail runs the height of the row.",
-						},
-						{
-							value: "billing",
-							label: "Billing",
-							panel: "↑ ↓ move; ← → are left to the page.",
-						},
-						{ value: "api", label: "API keys", panel: "Same component, one prop." },
-					],
-				});
-
-				add(r.many, "many", {
-					tabs: Array.from({ length: 14 }, (_, i) => ({
-						value: `s${i}`,
-						label: `section ${i + 1}`,
-						panel: `Panel ${i + 1}.`,
-					})),
-				});
-
-				track(
-					delegate(el, {
-						cycle: () => {
-							const from = basics.selected.get();
-							const i = values.indexOf(from);
-							for (let n = 1; n <= values.length; n++) {
-								basics.select(values[(i + n) % values.length]);
-								if (basics.selected.get() !== from) return;
-							}
-						},
-
-						toggleDisabled: () => {
-							const tab = basics.tab("markup");
-							tab.disabled = !tab.disabled;
-							// `disabled` is read off the element every time, so this
-							// takes effect at once with nothing to re-render. What it
-							// does NOT do is move the selection: the component changes
-							// nothing behind your back.
-							if (tab.disabled && basics.selected.get() === "markup") {
-								basics.select("overview");
-							}
-							log(`markup → ${tab.disabled ? "disabled" : "enabled"}`);
-						},
-
-						inDialog: () => {
-							const dlg = ui.createDialog({
-								title: "Settings",
-								body: ui.createTabs({
-									ariaLabel: "in a dialog",
-									tabs: [
-										{
-											value: "general",
-											label: "General",
-											panel: fromTemplate("tpl-gallery-tabs-panel"),
-										},
-										{
-											value: "danger",
-											label: "Danger zone",
-											panel:
-												"The strip takes the dialog panel's control " +
-												"context — hover a tab.",
-										},
-									],
-									onSelect: (value) =>
-										log(`in dialog → vui:select "${value}"`),
-								}), // a VIEW: destroyed with the dialog
-								onClose: () => dlg.destroy(),
-							});
-							document.body.append(dlg.el);
-							dlg.open();
-						},
-					}),
-				);
+			add(r.many, "many", {
+				tabs: Array.from({ length: 14 }, (_, i) => ({
+					value: `s${i}`,
+					label: `section ${i + 1}`,
+					panel: `Panel ${i + 1}.`,
+				})),
 			});
+
+			track(
+				delegate(el, {
+					cycle: () => {
+						const from = basics.selected.get();
+						const i = values.indexOf(from);
+						for (let n = 1; n <= values.length; n++) {
+							basics.select(values[(i + n) % values.length]);
+							if (basics.selected.get() !== from) return;
+						}
+					},
+
+					toggleDisabled: () => {
+						const tab = basics.tab("markup");
+						tab.disabled = !tab.disabled;
+						// `disabled` is read off the element every time, so this
+						// takes effect at once with nothing to re-render. What it
+						// does NOT do is move the selection: the component changes
+						// nothing behind your back.
+						if (tab.disabled && basics.selected.get() === "markup") {
+							basics.select("overview");
+						}
+						log(`markup → ${tab.disabled ? "disabled" : "enabled"}`);
+					},
+
+					inDialog: () => {
+						const dlg = ui.createDialog({
+							title: "Settings",
+							body: ui.createTabs({
+								ariaLabel: "in a dialog",
+								tabs: [
+									{
+										value: "general",
+										label: "General",
+										panel: fromTemplate("tpl-gallery-tabs-panel"),
+									},
+									{
+										value: "danger",
+										label: "Danger zone",
+										panel: "The strip takes the dialog panel's control " +
+											"context — hover a tab.",
+									},
+								],
+								onSelect: (value) => log(`in dialog → vui:select "${value}"`),
+							}), // a VIEW: destroyed with the dialog
+							onClose: () => dlg.destroy(),
+						});
+						document.body.append(dlg.el);
+						dlg.open();
+					},
+				}),
+			);
+		});
 		</script>
 	</body>
 </html>

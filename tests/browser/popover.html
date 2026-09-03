@@ -43,7 +43,8 @@
 			<div class="vui-menu">
 				<button type="button" role="menuitem" value="one">One</button>
 				<button type="button" role="menuitem" value="two" disabled>Two</button>
-				<button type="button" role="menuitem" value="three">Three <kbd>⌘3</kbd></button>
+				<button type="button" role="menuitem"
+					value="three">Three <kbd>⌘3</kbd></button>
 				<hr />
 				<button type="button" role="menuitem" data-value="four">Four</button>
 			</div>
@@ -78,7 +79,10 @@
 			);
 		const near = (a, b, eps = 1.5) => Math.abs(a - b) <= eps;
 		const rect = (el) => el.getBoundingClientRect();
-		const fmt = (r) => `(${r.left.toFixed(1)},${r.top.toFixed(1)} ${r.width.toFixed(1)}x${r.height.toFixed(1)})`;
+		const fmt = (r) =>
+			`(${r.left.toFixed(1)},${r.top.toFixed(1)} ${r.width.toFixed(1)}x${
+				r.height.toFixed(1)
+			})`;
 		/** A fixed-position anchor button at a known spot. */
 		const anchorAt = (style, text = "anchor") => {
 			const b = document.createElement("button");
@@ -96,7 +100,9 @@
 		const withoutAnchorPositioning = (fn) => {
 			const real = CSS.supports.bind(CSS);
 			CSS.supports = (p, v) =>
-				/^(anchor-name|position-area|position-try-fallbacks)$/.test(p) ? false : real(p, v);
+				/^(anchor-name|position-area|position-try-fallbacks)$/.test(p)
+					? false
+					: real(p, v);
 			try {
 				return fn();
 			} finally {
@@ -112,7 +118,10 @@
 				CSS.supports("position-area", "block-end span-inline-end") &&
 					CSS.supports("position-try-fallbacks", "flip-block"),
 			);
-			check("button(): role", button("x", { role: "menuitem" }).getAttribute("role") === "menuitem");
+			check(
+				"button(): role",
+				button("x", { role: "menuitem" }).getAttribute("role") === "menuitem",
+			);
 			let threw = false;
 			try {
 				createPopover({});
@@ -130,7 +139,10 @@
 				onOpen: () => seen.push("cb:open"),
 				onClose: () => seen.push("cb:close"),
 			});
-			p1.el.addEventListener("vui:open", (e) => seen.push("ev:open" + (e.detail.anchor === a1 ? "" : "?")));
+			p1.el.addEventListener(
+				"vui:open",
+				(e) => seen.push("ev:open" + (e.detail.anchor === a1 ? "" : "?")),
+			);
 			p1.el.addEventListener("vui:close", () => seen.push("ev:close"));
 			check("root: popover=auto", p1.el.getAttribute("popover") === "auto");
 			check("root: data-scope", p1.el.dataset.scope === "popover");
@@ -142,7 +154,10 @@
 			check("anchor: aria-expanded=false", a1.getAttribute("aria-expanded") === "false");
 			check("anchor: no aria-haspopup without a role", !a1.hasAttribute("aria-haspopup"));
 			check("anchor: the native invoker", a1.popoverTargetElement === p1.el);
-			check("anchor: named for CSS anchor positioning", a1.style.anchorName === `--${p1.el.id}`);
+			check(
+				"anchor: named for CSS anchor positioning",
+				a1.style.anchorName === `--${p1.el.id}`,
+			);
 			check("root: points at the anchor", p1.el.style.positionAnchor === `--${p1.el.id}`);
 			check("closed: isOpen false", p1.isOpen.get() === false);
 
@@ -153,7 +168,11 @@
 			check("open(): isOpen true synchronously", p1.isOpen.get() === true);
 			check("open(): aria-expanded=true", a1.getAttribute("aria-expanded") === "true");
 			await w;
-			check("open -> callback + event (after the native toggle)", seen.join() === "cb:open,ev:open", seen.join());
+			check(
+				"open -> callback + event (after the native toggle)",
+				seen.join() === "cb:open,ev:open",
+				seen.join(),
+			);
 			// (Chrome serializes `block-end span-inline-end` as its shorthand `end span-end`)
 			const area = (el) => getComputedStyle(el).positionArea;
 			const isArea = (el, ...forms) => forms.includes(area(el));
@@ -164,12 +183,28 @@
 			);
 			{
 				const a = rect(a1), p = rect(p1.el);
-				check("bottom-start: below the anchor by `offset`", near(p.top, a.bottom + 4), `${fmt(a)} ${fmt(p)}`);
-				check("bottom-start: inline-start edges aligned", near(p.left, a.left), `${fmt(a)} ${fmt(p)}`);
+				check(
+					"bottom-start: below the anchor by `offset`",
+					near(p.top, a.bottom + 4),
+					`${fmt(a)} ${fmt(p)}`,
+				);
+				check(
+					"bottom-start: inline-start edges aligned",
+					near(p.left, a.left),
+					`${fmt(a)} ${fmt(p)}`,
+				);
 			}
-			check("chrome: container radius tier", getComputedStyle(p1.el).borderRadius === "12px", getComputedStyle(p1.el).borderRadius);
+			check(
+				"chrome: container radius tier",
+				getComputedStyle(p1.el).borderRadius === "12px",
+				getComputedStyle(p1.el).borderRadius,
+			);
 			check("chrome: overlay shadow", getComputedStyle(p1.el).boxShadow !== "none");
-			check("chrome: 1px border, not the UA's 3px", getComputedStyle(p1.el).borderTopWidth === "1px", getComputedStyle(p1.el).borderTopWidth);
+			check(
+				"chrome: 1px border, not the UA's 3px",
+				getComputedStyle(p1.el).borderTopWidth === "1px",
+				getComputedStyle(p1.el).borderTopWidth,
+			);
 			check(
 				"surface declares --vui-control-bg (controls inside lift)",
 				getComputedStyle(p1.el).getPropertyValue("--vui-control-bg").trim() !== "",
@@ -188,12 +223,22 @@
 			w = toggled(p1);
 			a1.click();
 			await w;
-			check("anchor click opens (native invoker)", p1.el.matches(":popover-open") && p1.isOpen.get() === true);
+			check(
+				"anchor click opens (native invoker)",
+				p1.el.matches(":popover-open") && p1.isOpen.get() === true,
+			);
 			w = toggled(p1);
 			a1.click();
 			await w;
-			check("anchor click again closes", !p1.el.matches(":popover-open") && p1.isOpen.get() === false);
-			check("both reported like any other route", seen.join() === "cb:open,ev:open,cb:close,ev:close", seen.join());
+			check(
+				"anchor click again closes",
+				!p1.el.matches(":popover-open") && p1.isOpen.get() === false,
+			);
+			check(
+				"both reported like any other route",
+				seen.join() === "cb:open,ev:open,cb:close,ev:close",
+				seen.join(),
+			);
 			w = toggled(p1);
 			p1.toggle();
 			await w;
@@ -210,27 +255,70 @@
 			await w;
 			p1.destroy();
 			check("destroy(): root removed", !p1.el.isConnected);
-			check("destroy(): anchor aria removed", !a1.hasAttribute("aria-controls") && !a1.hasAttribute("aria-expanded"));
+			check(
+				"destroy(): anchor aria removed",
+				!a1.hasAttribute("aria-controls") && !a1.hasAttribute("aria-expanded"),
+			);
 			check("destroy(): anchor-name restored", a1.style.anchorName === "");
 			check("destroy(): invoker unlinked", a1.popoverTargetElement === null);
 			a1.remove();
 
 			/* ---- every placement, anchored ------------------------------------ */
 			const PLACEMENTS = [
-				["bottom", ["block-end"], (a, p) => near(p.top, a.bottom + 4) && near(p.left + p.width / 2, a.left + a.width / 2)],
-				["bottom-end", ["block-end span-inline-start", "end span-start"], (a, p) => near(p.top, a.bottom + 4) && near(p.right, a.right)],
-				["top-start", ["block-start span-inline-end", "start span-end"], (a, p) => near(p.bottom, a.top - 4) && near(p.left, a.left)],
-				["top", ["block-start"], (a, p) => near(p.bottom, a.top - 4) && near(p.left + p.width / 2, a.left + a.width / 2)],
-				["top-end", ["block-start span-inline-start", "start span-start"], (a, p) => near(p.bottom, a.top - 4) && near(p.right, a.right)],
-				["left", ["left"], (a, p) => near(p.right, a.left - 4) && near(p.top + p.height / 2, a.top + a.height / 2)],
-				["right", ["right"], (a, p) => near(p.left, a.right + 4) && near(p.top + p.height / 2, a.top + a.height / 2)],
+				[
+					"bottom",
+					["block-end"],
+					(a, p) =>
+						near(p.top, a.bottom + 4) &&
+						near(p.left + p.width / 2, a.left + a.width / 2),
+				],
+				[
+					"bottom-end",
+					["block-end span-inline-start", "end span-start"],
+					(a, p) => near(p.top, a.bottom + 4) && near(p.right, a.right),
+				],
+				[
+					"top-start",
+					["block-start span-inline-end", "start span-end"],
+					(a, p) => near(p.bottom, a.top - 4) && near(p.left, a.left),
+				],
+				[
+					"top",
+					["block-start"],
+					(a, p) =>
+						near(p.bottom, a.top - 4) &&
+						near(p.left + p.width / 2, a.left + a.width / 2),
+				],
+				[
+					"top-end",
+					["block-start span-inline-start", "start span-start"],
+					(a, p) => near(p.bottom, a.top - 4) && near(p.right, a.right),
+				],
+				[
+					"left",
+					["left"],
+					(a, p) =>
+						near(p.right, a.left - 4) &&
+						near(p.top + p.height / 2, a.top + a.height / 2),
+				],
+				[
+					"right",
+					["right"],
+					(a, p) =>
+						near(p.left, a.right + 4) &&
+						near(p.top + p.height / 2, a.top + a.height / 2),
+				],
 			];
 			for (const [placement, forms, fits] of PLACEMENTS) {
 				const a = anchorAt("top: 200px; left: 200px", placement);
 				const p = createPopover({ anchor: a, body: "x", placement });
 				p.open();
 				check(`${placement}: position-area`, isArea(p.el, ...forms), area(p.el));
-				check(`${placement}: geometry`, fits(rect(a), rect(p.el)), `${fmt(rect(a))} ${fmt(rect(p.el))}`);
+				check(
+					`${placement}: geometry`,
+					fits(rect(a), rect(p.el)),
+					`${fmt(rect(a))} ${fmt(rect(p.el))}`,
+				);
 				p.destroy();
 				a.remove();
 			}
@@ -238,7 +326,11 @@
 				const a = anchorAt("top: 200px; left: 200px");
 				const p = createPopover({ anchor: a, body: "x", offset: 20 });
 				p.open();
-				check("offset: the gap", near(rect(p.el).top, rect(a).bottom + 20), `${rect(p.el).top} vs ${rect(a).bottom + 20}`);
+				check(
+					"offset: the gap",
+					near(rect(p.el).top, rect(a).bottom + 20),
+					`${rect(p.el).top} vs ${rect(a).bottom + 20}`,
+				);
 				p.destroy();
 				a.remove();
 			}
@@ -246,9 +338,17 @@
 			/* ---- anchored fallbacks: flip when there is no room --------------- */
 			{
 				const a = anchorAt("bottom: 0px; left: 100px", "edge");
-				const p = createPopover({ anchor: a, body: "flip me", placement: "bottom-start" });
+				const p = createPopover({
+					anchor: a,
+					body: "flip me",
+					placement: "bottom-start",
+				});
 				p.open();
-				check("anchored: flips above when nothing fits below", near(rect(p.el).bottom, rect(a).top - 4), `${fmt(rect(a))} ${fmt(rect(p.el))}`);
+				check(
+					"anchored: flips above when nothing fits below",
+					near(rect(p.el).bottom, rect(a).top - 4),
+					`${fmt(rect(a))} ${fmt(rect(p.el))}`,
+				);
 				p.destroy();
 				a.remove();
 			}
@@ -260,7 +360,11 @@
 					placement: "bottom-start",
 				});
 				p.open();
-				check("anchored: flips inline at the right edge", near(rect(p.el).right, rect(a).right), `${fmt(rect(a))} ${fmt(rect(p.el))}`);
+				check(
+					"anchored: flips inline at the right edge",
+					near(rect(p.el).right, rect(a).right),
+					`${fmt(rect(a))} ${fmt(rect(p.el))}`,
+				);
 				p.destroy();
 				a.remove();
 			}
@@ -271,7 +375,10 @@
 				const p = createPopover({ anchor: a, body: "late" });
 				p.el.remove();
 				p.open();
-				check("open(): re-inserts a removed root after the anchor", a.nextElementSibling === p.el && p.el.matches(":popover-open"));
+				check(
+					"open(): re-inserts a removed root after the anchor",
+					a.nextElementSibling === p.el && p.el.matches(":popover-open"),
+				);
 				p.destroy();
 				a.remove();
 			}
@@ -283,7 +390,10 @@
 				check("disconnected anchor: nothing inserted", !p.el.isConnected);
 				document.body.append(a);
 				p.open();
-				check("… open() inserts after it once it is connected", a.nextElementSibling === p.el && p.isOpen.get() === true);
+				check(
+					"… open() inserts after it once it is connected",
+					a.nextElementSibling === p.el && p.isOpen.get() === true,
+				);
 				p.destroy();
 				a.remove();
 			}
@@ -312,7 +422,10 @@
 				const p = createPopover({ anchor: a, body: "x", trigger: false });
 				a.click();
 				await new Promise((r) => setTimeout(r, 30));
-				check("trigger:false — the anchor does nothing", !p.el.matches(":popover-open") && a.popoverTargetElement === null);
+				check(
+					"trigger:false — the anchor does nothing",
+					!p.el.matches(":popover-open") && a.popoverTargetElement === null,
+				);
 				p.destroy();
 				a.remove();
 			}
@@ -321,7 +434,10 @@
 				const a = anchorAt("top: 100px; left: 100px");
 				const p = createPopover({ anchor: a, body: "x", role: "dialog" });
 				check("role: set on the root", p.el.getAttribute("role") === "dialog");
-				check("role: aria-haspopup on the anchor", a.getAttribute("aria-haspopup") === "dialog");
+				check(
+					"role: aria-haspopup on the anchor",
+					a.getAttribute("aria-haspopup") === "dialog",
+				);
 				p.destroy();
 				check("destroy(): aria-haspopup removed", !a.hasAttribute("aria-haspopup"));
 				a.remove();
@@ -335,27 +451,62 @@
 				anchor: am,
 				role: "menu",
 				body: fromTemplate("tpl-menu"),
-				onSelect: (v, item) => picks.push("cb:" + v + (item?.getAttribute("role") === "menuitem" ? "" : "?")),
+				onSelect: (v, item) =>
+					picks.push(
+						"cb:" + v + (item?.getAttribute("role") === "menuitem" ? "" : "?"),
+					),
 			});
 			pm.el.addEventListener("vui:select", (e) => picks.push("ev:" + e.detail.value));
 			check("menu: role on the root", pm.el.getAttribute("role") === "menu");
-			check("menu: labelled by the anchor", pm.el.getAttribute("aria-labelledby") === "menu-anchor");
-			check("menu: aria-haspopup=menu on the anchor", am.getAttribute("aria-haspopup") === "menu");
-			check("menu: the root has no padding of its own", getComputedStyle(pm.el).padding === "0px", getComputedStyle(pm.el).padding);
+			check(
+				"menu: labelled by the anchor",
+				pm.el.getAttribute("aria-labelledby") === "menu-anchor",
+			);
+			check(
+				"menu: aria-haspopup=menu on the anchor",
+				am.getAttribute("aria-haspopup") === "menu",
+			);
+			check(
+				"menu: the root has no padding of its own",
+				getComputedStyle(pm.el).padding === "0px",
+				getComputedStyle(pm.el).padding,
+			);
 			am.focus();
 			pm.open();
 			const its = [...pm.el.querySelectorAll('[role="menuitem"]')];
-			check("menu: opening focuses the first item", document.activeElement === its[0], document.activeElement?.outerHTML);
+			check(
+				"menu: opening focuses the first item",
+				document.activeElement === its[0],
+				document.activeElement?.outerHTML,
+			);
 			// bare items are laid out and painted by the base layer, by ROLE
 			{
 				const cs = getComputedStyle(its[0]);
-				check("item: laid out by the base layer (flex)", cs.display === "flex", cs.display);
-				check("item: full width of the list", near(rect(its[0]).width, rect(its[0].parentElement).width - 8), `${rect(its[0]).width} vs ${rect(its[0].parentElement).width - 8}`);
-				check("item: transparent at rest", cs.backgroundColor === "rgba(0, 0, 0, 0)", cs.backgroundColor);
+				check(
+					"item: laid out by the base layer (flex)",
+					cs.display === "flex",
+					cs.display,
+				);
+				check(
+					"item: full width of the list",
+					near(rect(its[0]).width, rect(its[0].parentElement).width - 8),
+					`${rect(its[0]).width} vs ${rect(its[0].parentElement).width - 8}`,
+				);
+				check(
+					"item: transparent at rest",
+					cs.backgroundColor === "rgba(0, 0, 0, 0)",
+					cs.backgroundColor,
+				);
 				check("item: no border", cs.borderTopWidth === "0px", cs.borderTopWidth);
 				check("item: element radius tier", cs.borderRadius === "8px", cs.borderRadius);
-				check("item: <kbd> hint pushed to the end", getComputedStyle(its[2].querySelector("kbd")).marginInlineStart !== "0px");
-				check("separator: a hairline", getComputedStyle(pm.el.querySelector("hr")).borderTopWidth === "1px");
+				check(
+					"item: <kbd> hint pushed to the end",
+					getComputedStyle(its[2].querySelector("kbd")).marginInlineStart !== "0px",
+				);
+				check(
+					"separator: a hairline",
+					getComputedStyle(pm.el.querySelector("hr")).borderTopWidth === "1px",
+				);
 				// the context channel reaches the items: the popover surface declares
 				// the hover, the item inherits it (the hover itself needs a pointer)
 				check(
@@ -364,7 +515,11 @@
 				);
 			}
 			key("ArrowDown");
-			check("↓ skips a disabled item", document.activeElement === its[2], document.activeElement?.textContent);
+			check(
+				"↓ skips a disabled item",
+				document.activeElement === its[2],
+				document.activeElement?.textContent,
+			);
 			key("ArrowDown");
 			check("↓ moves on", document.activeElement === its[3]);
 			key("ArrowDown");
@@ -378,7 +533,11 @@
 			its[0].focus(); // (hiding the focused item would drop focus to <body>)
 			its[3].hidden = true;
 			key("End");
-			check("a hidden item is skipped", document.activeElement === its[2], document.activeElement?.textContent?.slice(0, 40));
+			check(
+				"a hidden item is skipped",
+				document.activeElement === its[2],
+				document.activeElement?.textContent?.slice(0, 40),
+			);
 			its[3].hidden = false;
 			its[0].dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
 			check("hovering an item focuses it", document.activeElement === its[0]);
@@ -386,10 +545,18 @@
 			check("hovering a disabled item does not", document.activeElement === its[0]);
 			w = toggled(pm);
 			its[2].click();
-			check("select: value from the `value` attribute, callback + event", picks.join() === "cb:three,ev:three", picks.join());
+			check(
+				"select: value from the `value` attribute, callback + event",
+				picks.join() === "cb:three,ev:three",
+				picks.join(),
+			);
 			check("select: closes (closeOnSelect)", !pm.el.matches(":popover-open"));
 			await w;
-			check("select: focus returns to the anchor", document.activeElement === am, document.activeElement?.outerHTML);
+			check(
+				"select: focus returns to the anchor",
+				document.activeElement === am,
+				document.activeElement?.outerHTML,
+			);
 			pm.destroy();
 
 			{
@@ -433,10 +600,18 @@
 				list.className = "vui-menu";
 				list.append(a);
 				picks.length = 0;
-				const p = createPopover({ anchor: am, role: "menu", body: list, onSelect: (v) => picks.push(v) });
+				const p = createPopover({
+					anchor: am,
+					role: "menu",
+					body: list,
+					onSelect: (v) => picks.push(v),
+				});
 				p.open();
 				check("an <a role=menuitem> is focused on open", document.activeElement === a);
-				check("an <a role=menuitem> is painted as an item", getComputedStyle(a).display === "flex");
+				check(
+					"an <a role=menuitem> is painted as an item",
+					getComputedStyle(a).display === "flex",
+				);
 				w = toggled(p);
 				key(" ");
 				check("Space activates a non-button item", picks.join() === "link", picks.join());
@@ -452,12 +627,20 @@
 					return { el, hits: () => hits };
 				});
 				picks.length = 0;
-				const p = createPopover({ anchor: am, role: "menu", body: child, onSelect: (v) => picks.push(v) });
+				const p = createPopover({
+					anchor: am,
+					role: "menu",
+					body: child,
+					onSelect: (v) => picks.push(v),
+				});
 				p.open();
 				child.el.querySelector("button").click();
 				await new Promise((r) => setTimeout(r, 30));
 				check("nested data-scope: the child's own delegate fired", child.hits() === 1);
-				check("nested data-scope: the menu saw nothing (no select, still open)", picks.length === 0 && p.el.matches(":popover-open"));
+				check(
+					"nested data-scope: the menu saw nothing (no select, still open)",
+					picks.length === 0 && p.el.matches(":popover-open"),
+				);
 				p.destroy();
 				check("destroy(): mounted child view removed too", !child.el.isConnected);
 				check("destroy(): isOpen false", p.isOpen.get() === false);
@@ -471,70 +654,133 @@
 				loose.textContent = "del";
 				document.body.append(loose);
 				const cs = getComputedStyle(loose);
-				check(".vui-menuitem outside a container is an item", cs.display === "flex", cs.display);
-				check(".vui-menuitem--destructive reads the role color", cs.color === "rgb(7, 8, 9)", cs.color);
+				check(
+					".vui-menuitem outside a container is an item",
+					cs.display === "flex",
+					cs.display,
+				);
+				check(
+					".vui-menuitem--destructive reads the role color",
+					cs.color === "rgb(7, 8, 9)",
+					cs.color,
+				);
 				loose.remove();
 				// role wins over .vui-btn inside a container (button() items)
 				const box = document.createElement("div");
 				box.className = "vui-menu";
 				box.append(button("x", { role: "menuitem" }));
 				document.body.append(box);
-				check("role=menuitem beats .vui-btn (button() builds items)", getComputedStyle(box.firstChild).display === "flex");
+				check(
+					"role=menuitem beats .vui-btn (button() builds items)",
+					getComputedStyle(box.firstChild).display === "flex",
+				);
 				box.remove();
 			}
 
 			/* ---- the JS placement (no CSS Anchor Positioning) ----------------- */
 			{
 				const a = anchorAt("top: 150px; left: 150px", "js");
-				const p = withoutAnchorPositioning(() => createPopover({ anchor: a, body: "js placed" }));
+				const p = withoutAnchorPositioning(() =>
+					createPopover({ anchor: a, body: "js placed" })
+				);
 				check("js: the anchor is not named", a.style.anchorName === "");
 				check("js: no position-area", p.el.style.positionArea === "");
-				check("js: try-fallbacks switched off", p.el.style.positionTryFallbacks === "none");
+				check(
+					"js: try-fallbacks switched off",
+					p.el.style.positionTryFallbacks === "none",
+				);
 				p.open();
-				check("js: below the anchor by `offset`", near(rect(p.el).top, rect(a).bottom + 4), `${fmt(rect(a))} ${fmt(rect(p.el))}`);
-				check("js: inline-start edges aligned", near(rect(p.el).left, rect(a).left), `${fmt(rect(a))} ${fmt(rect(p.el))}`);
+				check(
+					"js: below the anchor by `offset`",
+					near(rect(p.el).top, rect(a).bottom + 4),
+					`${fmt(rect(a))} ${fmt(rect(p.el))}`,
+				);
+				check(
+					"js: inline-start edges aligned",
+					near(rect(p.el).left, rect(a).left),
+					`${fmt(rect(a))} ${fmt(rect(p.el))}`,
+				);
 				a.style.left = "250px";
 				dispatchEvent(new Event("resize"));
-				check("js: follows the anchor on resize", near(rect(p.el).left, rect(a).left), `${fmt(rect(a))} ${fmt(rect(p.el))}`);
+				check(
+					"js: follows the anchor on resize",
+					near(rect(p.el).left, rect(a).left),
+					`${fmt(rect(a))} ${fmt(rect(p.el))}`,
+				);
 				a.style.left = "300px";
 				dispatchEvent(new Event("scroll"));
-				check("js: follows the anchor on scroll", near(rect(p.el).left, rect(a).left), `${fmt(rect(a))} ${fmt(rect(p.el))}`);
+				check(
+					"js: follows the anchor on scroll",
+					near(rect(p.el).left, rect(a).left),
+					`${fmt(rect(a))} ${fmt(rect(p.el))}`,
+				);
 				p.close();
 				a.style.left = "350px";
 				dispatchEvent(new Event("scroll"));
 				p.open();
-				check("js: placed afresh on re-open", near(rect(p.el).left, rect(a).left), `${fmt(rect(a))} ${fmt(rect(p.el))}`);
+				check(
+					"js: placed afresh on re-open",
+					near(rect(p.el).left, rect(a).left),
+					`${fmt(rect(a))} ${fmt(rect(p.el))}`,
+				);
 				p.destroy();
 				a.remove();
 			}
-			for (const [placement, fits] of [
-				["bottom-end", (a, p) => near(p.top, a.bottom + 4) && near(p.right, a.right)],
-				["top", (a, p) => near(p.bottom, a.top - 4) && near(p.left + p.width / 2, a.left + a.width / 2)],
-				["left", (a, p) => near(p.right, a.left - 4) && near(p.top + p.height / 2, a.top + a.height / 2)],
-				["right", (a, p) => near(p.left, a.right + 4) && near(p.top + p.height / 2, a.top + a.height / 2)],
-			]) {
+			for (
+				const [placement, fits] of [
+					["bottom-end", (a, p) => near(p.top, a.bottom + 4) && near(p.right, a.right)],
+					["top", (a, p) =>
+						near(p.bottom, a.top - 4) &&
+						near(p.left + p.width / 2, a.left + a.width / 2)],
+					["left", (a, p) =>
+						near(p.right, a.left - 4) &&
+						near(p.top + p.height / 2, a.top + a.height / 2)],
+					["right", (a, p) =>
+						near(p.left, a.right + 4) &&
+						near(p.top + p.height / 2, a.top + a.height / 2)],
+				]
+			) {
 				const a = anchorAt("top: 200px; left: 200px", placement);
-				const p = withoutAnchorPositioning(() => createPopover({ anchor: a, body: "x", placement }));
+				const p = withoutAnchorPositioning(() =>
+					createPopover({ anchor: a, body: "x", placement })
+				);
 				p.open();
-				check(`js: ${placement}`, fits(rect(a), rect(p.el)), `${fmt(rect(a))} ${fmt(rect(p.el))}`);
+				check(
+					`js: ${placement}`,
+					fits(rect(a), rect(p.el)),
+					`${fmt(rect(a))} ${fmt(rect(p.el))}`,
+				);
 				p.destroy();
 				a.remove();
 			}
 			{
 				const a = anchorAt("bottom: 0px; left: 100px", "edge");
-				const p = withoutAnchorPositioning(() => createPopover({ anchor: a, body: "flip me" }));
+				const p = withoutAnchorPositioning(() =>
+					createPopover({ anchor: a, body: "flip me" })
+				);
 				p.open();
-				check("js: flips above when nothing fits below", near(rect(p.el).bottom, rect(a).top - 4), `${fmt(rect(a))} ${fmt(rect(p.el))}`);
+				check(
+					"js: flips above when nothing fits below",
+					near(rect(p.el).bottom, rect(a).top - 4),
+					`${fmt(rect(a))} ${fmt(rect(p.el))}`,
+				);
 				p.destroy();
 				a.remove();
 			}
 			{
 				const a = anchorAt("top: 100px; right: 0px", "edge");
 				const p = withoutAnchorPositioning(() =>
-					createPopover({ anchor: a, body: "a popover a good deal wider than its anchor" })
+					createPopover({
+						anchor: a,
+						body: "a popover a good deal wider than its anchor",
+					})
 				);
 				p.open();
-				check("js: clamped into the viewport at the right edge", rect(p.el).right <= innerWidth - 8 + 0.5 && rect(p.el).left >= 8 - 0.5, fmt(rect(p.el)));
+				check(
+					"js: clamped into the viewport at the right edge",
+					rect(p.el).right <= innerWidth - 8 + 0.5 && rect(p.el).left >= 8 - 0.5,
+					fmt(rect(p.el)),
+				);
 				p.destroy();
 				a.remove();
 			}
@@ -545,7 +791,11 @@
 				w = toggled(p);
 				a.click();
 				await w;
-				check("js: placed after the native toggle too", p.isOpen.get() && near(rect(p.el).top, rect(a).bottom + 4), `${fmt(rect(a))} ${fmt(rect(p.el))}`);
+				check(
+					"js: placed after the native toggle too",
+					p.isOpen.get() && near(rect(p.el).top, rect(a).bottom + 4),
+					`${fmt(rect(a))} ${fmt(rect(p.el))}`,
+				);
 				p.destroy();
 				a.remove();
 			}

@@ -137,15 +137,10 @@ README.md · API.md        — human docs
       string, which would break `COMPONENTS_BASE` in the browser.
 - [ ] A dependency published < 24 h ago trips Deno's minimum-dependency-age policy; pass
       `--minimum-dependency-age 0` for that run rather than lowering it in `deno.json`.
-- [ ] **Keep `deno fmt` out of a feature commit.** The `.html` files are hand-formatted and
-      not yet fmt-clean (`deno fmt --check` lists 7 of them). A blanket run is _safe_ —
-      measured, by fingerprinting the rendered gallery before and after (every text node and
-      every bounding box): identical, and all four browser-test pages still pass —
-      but it rewrites ~2600 lines, mostly de-indenting each `<script>` / `<style>` body to
-      column 0, and that buries the real diff. (The one place it reads worse: the browser
-      tests, where a one-line `check(name, cond, detail)` becomes five.) So format only what
-      you touched (`deno fmt src/mod.ts API.md`) — adopting it for HTML is a commit of its
-      own.
+- [ ] **`deno fmt` covers the `.html` files too** — the embedded `<style>` and `<script>`
+      bodies included, which is why a component's inline module sits at column 0. The repo is
+      clean (`deno fmt --check`, 23 files); keep it that way, and keep a reformat out of a
+      feature commit so it never buries the real diff.
 
 ## Documentation Index
 

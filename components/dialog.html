@@ -184,110 +184,110 @@
 </style>
 
 <script type="module">
-	import {
-		applyBindings,
-		createView,
-		delegate,
-		fromTemplate,
-		mount,
-		observable,
-		refs,
-	} from "@marianmeres/vanilla";
+import {
+	applyBindings,
+	createView,
+	delegate,
+	fromTemplate,
+	mount,
+	observable,
+	refs,
+} from "@marianmeres/vanilla";
 
-	let seq = 0;
+let seq = 0;
 
-	/** Fill a slot from a `Slot` value: text | element | view (mounted + tracked). */
-	function fill(track, slot, content) {
-		if (content == null) return;
-		if (typeof content === "string") slot.textContent = content;
-		else if (content instanceof Node) slot.replaceChildren(content);
-		else mount(track, slot, content);
-	}
+/** Fill a slot from a `Slot` value: text | element | view (mounted + tracked). */
+function fill(track, slot, content) {
+	if (content == null) return;
+	if (typeof content === "string") slot.textContent = content;
+	else if (content instanceof Node) slot.replaceChildren(content);
+	else mount(track, slot, content);
+}
 
-	export function createDialog({
-		title = "",
-		body,
-		footer,
-		modal = true,
-		closeOnBackdrop = true,
-		closeButton = true,
-		onClose,
-	} = {}) {
-		return createView((track) => {
-			const el = fromTemplate("tpl-vui-dialog");
-			const r = refs(el);
-			const isOpen = observable(false);
-			// destroy() removes the node; removal fires no native `close`, so settle
-			// the observable ourselves (no onClose — teardown is not a verdict).
-			track(() => isOpen.set(false));
+export function createDialog({
+	title = "",
+	body,
+	footer,
+	modal = true,
+	closeOnBackdrop = true,
+	closeButton = true,
+	onClose,
+} = {}) {
+	return createView((track) => {
+		const el = fromTemplate("tpl-vui-dialog");
+		const r = refs(el);
+		const isOpen = observable(false);
+		// destroy() removes the node; removal fires no native `close`, so settle
+		// the observable ourselves (no onClose — teardown is not a verdict).
+		track(() => isOpen.set(false));
 
-			// header: title + ✕ (either may go; both gone → no header at all)
-			applyBindings(el, { title });
-			r.title.id = `vui-dialog-title-${++seq}`;
-			el.setAttribute("aria-labelledby", r.title.id);
-			r.title.hidden = !title;
-			r.closeButton.hidden = !closeButton;
-			r.header.hidden = !title && !closeButton;
+		// header: title + ✕ (either may go; both gone → no header at all)
+		applyBindings(el, { title });
+		r.title.id = `vui-dialog-title-${++seq}`;
+		el.setAttribute("aria-labelledby", r.title.id);
+		r.title.hidden = !title;
+		r.closeButton.hidden = !closeButton;
+		r.header.hidden = !title && !closeButton;
 
-			fill(track, r.body, body);
-			if (footer != null) {
-				fill(track, r.footer, footer);
-				r.footer.hidden = false;
-			}
+		fill(track, r.body, body);
+		if (footer != null) {
+			fill(track, r.footer, footer);
+			r.footer.hidden = false;
+		}
 
-			const api = {
-				el,
-				isOpen,
-				open() {
-					if (el.open) return;
-					modal ? el.showModal() : el.show();
-					isOpen.set(true);
+		const api = {
+			el,
+			isOpen,
+			open() {
+				if (el.open) return;
+				modal ? el.showModal() : el.show();
+				isOpen.set(true);
+			},
+			close(returnValue = "close") {
+				if (!el.open) return;
+				el.close(returnValue); // → native "close" event (async) → `closed`
+				isOpen.set(false); // mirror `el.open`, which is already false
+			},
+		};
+
+		// The root itself carries data-on for the dialog's own (non-bubbling)
+		// `cancel` / `close` events — delegate listens on the root, so it sees them.
+		track(
+			delegate(el, {
+				close: () => api.close("close"),
+				// only a click on the <dialog> itself is the backdrop — the panel
+				// fills the dialog, so any click on content targets the panel
+				backdrop: (e) => {
+					if (modal && closeOnBackdrop && e.target === el) {
+						api.close("backdrop");
+					}
 				},
-				close(returnValue = "close") {
-					if (!el.open) return;
-					el.close(returnValue); // → native "close" event (async) → `closed`
-					isOpen.set(false); // mirror `el.open`, which is already false
+				// Esc: the browser fires `cancel`, then closes with returnValue
+				// untouched — so we stamp the reason here, before that happens.
+				cancel: () => {
+					el.returnValue = "cancel";
 				},
-			};
+				// Every way of closing — ✕, close(), Esc, backdrop, a
+				// <form method="dialog"> submit — ends in the native `close` event.
+				closed: () => {
+					// Read the verdict, then forget it: the native `close` event is
+					// async, so resetting here (not in open()) can never race a pending
+					// close — and a later Esc without a `cancel` event can't inherit it.
+					const returnValue = el.returnValue || "cancel";
+					el.returnValue = "";
+					isOpen.set(false);
+					onClose?.(returnValue);
+					el.dispatchEvent(
+						new CustomEvent("vui:close", {
+							bubbles: true,
+							detail: { returnValue },
+						}),
+					);
+				},
+			}),
+		);
 
-			// The root itself carries data-on for the dialog's own (non-bubbling)
-			// `cancel` / `close` events — delegate listens on the root, so it sees them.
-			track(
-				delegate(el, {
-					close: () => api.close("close"),
-					// only a click on the <dialog> itself is the backdrop — the panel
-					// fills the dialog, so any click on content targets the panel
-					backdrop: (e) => {
-						if (modal && closeOnBackdrop && e.target === el) {
-							api.close("backdrop");
-						}
-					},
-					// Esc: the browser fires `cancel`, then closes with returnValue
-					// untouched — so we stamp the reason here, before that happens.
-					cancel: () => {
-						el.returnValue = "cancel";
-					},
-					// Every way of closing — ✕, close(), Esc, backdrop, a
-					// <form method="dialog"> submit — ends in the native `close` event.
-					closed: () => {
-						// Read the verdict, then forget it: the native `close` event is
-						// async, so resetting here (not in open()) can never race a pending
-						// close — and a later Esc without a `cancel` event can't inherit it.
-						const returnValue = el.returnValue || "cancel";
-						el.returnValue = "";
-						isOpen.set(false);
-						onClose?.(returnValue);
-						el.dispatchEvent(
-							new CustomEvent("vui:close", {
-								bubbles: true,
-								detail: { returnValue },
-							}),
-						);
-					},
-				}),
-			);
-
-			return api;
-		});
-	}
+		return api;
+	});
+}
 </script>

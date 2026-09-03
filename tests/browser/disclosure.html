@@ -104,7 +104,11 @@
 			check("open(): el.open synchronously", d.el.open);
 			check("open(): isOpen synchronously", d.isOpen.get() === true);
 			await w;
-			check("open() -> vui:open (callback + event)", seen.join() === "cb:open,ev:open:true", seen.join());
+			check(
+				"open() -> vui:open (callback + event)",
+				seen.join() === "cb:open,ev:open:true",
+				seen.join(),
+			);
 			check("open: the panel is rendered", panel.checkVisibility());
 
 			seen.length = 0;
@@ -118,20 +122,36 @@
 			w = toggled(d);
 			d.toggle();
 			await w;
-			check("toggle() opens", d.isOpen.get() === true && seen.join() === "cb:open,ev:open:true", seen.join());
+			check(
+				"toggle() opens",
+				d.isOpen.get() === true && seen.join() === "cb:open,ev:open:true",
+				seen.join(),
+			);
 			seen.length = 0;
 			w = toggled(d);
 			d.toggle();
 			await w;
-			check("toggle() closes", d.isOpen.get() === false && seen.join() === "cb:close,ev:close:false", seen.join());
+			check(
+				"toggle() closes",
+				d.isOpen.get() === false && seen.join() === "cb:close,ev:close:false",
+				seen.join(),
+			);
 
 			// the platform's own route: a click on the summary
 			seen.length = 0;
 			w = toggled(d);
 			summary.click();
 			await w;
-			check("summary click -> open + vui:open", d.el.open && d.isOpen.get() === true, seen.join());
-			check("summary click: one event, not two", seen.join() === "cb:open,ev:open:true", seen.join());
+			check(
+				"summary click -> open + vui:open",
+				d.el.open && d.isOpen.get() === true,
+				seen.join(),
+			);
+			check(
+				"summary click: one event, not two",
+				seen.join() === "cb:open,ev:open:true",
+				seen.join(),
+			);
 			seen.length = 0;
 			w = toggled(d);
 			d.close();
@@ -156,11 +176,19 @@
 			document.body.append(dOpen.el);
 			check("open:true -> el.open + isOpen", dOpen.el.open && dOpen.isOpen.get() === true);
 			await tick();
-			check("open:true fires nothing (a state, not a change)", pre.length === 0, pre.join());
+			check(
+				"open:true fires nothing (a state, not a change)",
+				pre.length === 0,
+				pre.join(),
+			);
 			w = toggled(dOpen);
 			dOpen.close();
 			await w;
-			check("…and the first real change still fires", pre.join() === "cb:close", pre.join());
+			check(
+				"…and the first real change still fires",
+				pre.join() === "cb:close",
+				pre.join(),
+			);
 			dOpen.destroy();
 
 			/* ---- the native exclusive group (`name`) --------------------------- */
@@ -175,9 +203,17 @@
 			b.open();
 			await w;
 			await tick();
-			check("exclusive: opening b closed a", !a.el.open && b.el.open, `a=${a.el.open} b=${b.el.open}`);
+			check(
+				"exclusive: opening b closed a",
+				!a.el.open && b.el.open,
+				`a=${a.el.open} b=${b.el.open}`,
+			);
 			check("exclusive: a settled its own isOpen", a.isOpen.get() === false);
-			check("exclusive: a reported it (vui:close)", log.join() === "b:open,a:close" || log.join() === "a:close,b:open", log.join());
+			check(
+				"exclusive: a reported it (vui:close)",
+				log.join() === "b:open,a:close" || log.join() === "a:close,b:open",
+				log.join(),
+			);
 			a.destroy();
 			b.destroy();
 
@@ -201,7 +237,10 @@
 			check("nested: the outer is untouched", outer.isOpen.get() === true && outer.el.open);
 			child.el.querySelector("button").click();
 			await tick();
-			check("nested data-scope: the child's own 'toggled' action fired", child.hits() === 1);
+			check(
+				"nested data-scope: the child's own 'toggled' action fired",
+				child.hits() === 1,
+			);
 			check("nested data-scope: it did not reach the disclosure", inner.el.open);
 
 			/* ---- destroy cascades ---------------------------------------------- */
@@ -243,7 +282,11 @@
 			);
 			const caret = getComputedStyle(summary, "::after");
 			check("summary: a caret, muted", caret.color === "rgb(7, 8, 9)", caret.color);
-			check("summary: the caret points down when closed", caret.rotate === "45deg", caret.rotate);
+			check(
+				"summary: the caret points down when closed",
+				caret.rotate === "45deg",
+				caret.rotate,
+			);
 			w = toggled(d);
 			d.open();
 			await w;
@@ -258,7 +301,11 @@
 			panel.replaceChildren(bare);
 			const bareSummary = bare.querySelector("summary");
 			const bcs = getComputedStyle(bareSummary);
-			check("bare <summary> in a slot is a control too", bcs.display === "flex", bcs.display);
+			check(
+				"bare <summary> in a slot is a control too",
+				bcs.display === "flex",
+				bcs.display,
+			);
 			check(
 				"bare <summary> takes the box's control context",
 				bcs.getPropertyValue("--vui-control-bg-hover").trim() === "rgb(4, 5, 6)",
