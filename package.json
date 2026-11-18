@@ -1,6 +1,6 @@
 {
   "name": "@marianmeres/vanilla-ui",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Reusable UI primitives on top of @marianmeres/vanilla, shipped as single-file .html components (a <template>, a @scope'd <style> and an inline module) loaded at runtime: dialog, popover/menu/tooltip, disclosure, tabs, toast, plus a token-driven base layer. No build step, just serve.",
   "license": "MIT",
   "author": "Marian Meres",
