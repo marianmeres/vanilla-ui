@@ -12,9 +12,16 @@
  *
  * Requires Chrome. Path from `$CHROME`, else the macOS default.
  */
-import { serveDir } from "@std/http/file-server";
+import { spawn } from "node:child_process";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
+import { demino } from "@marianmeres/demino";
+import { serve } from "@marianmeres/demino/node";
 
-const CHROME = Deno.env.get("CHROME") ??
+const CHROME = process.env.CHROME ??
 	"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 
 /** What a DevTools call resolves to — a result object, or nothing. */
@@ -57,17 +64,16 @@ export async function withChrome<T>(
 	opts: ChromeOptions = {},
 ): Promise<T> {
 	const port = opts.port ?? 9333;
-	const root = new URL("../", import.meta.url);
-	const server = Deno.serve(
-		{ port: 0, onListen: () => {} },
-		(req) => serveDir(req, { fsRoot: root.pathname, quiet: true }),
-	);
-	const origin = `http://localhost:${(server.addr as Deno.NetAddr).port}`;
+	const app = demino("", [], { logger: null });
+	app.static("/", fileURLToPath(new URL("../", import.meta.url)));
+	const server = await serve(app, { port: 0, onListen: () => {}, webSockets: false });
+	const origin = `http://localhost:${server.port}`;
 	// a fresh profile every run: no carried-over localStorage (the gallery
 	// remembers its theme), so a measured page is the same page every time
-	const profile = await Deno.makeTempDir({ prefix: "vui-chrome-" });
-	const chrome = new Deno.Command(CHROME, {
-		args: [
+	const profile = await mkdtemp(join(tmpdir(), "vui-chrome-"));
+	const chrome = spawn(
+		CHROME,
+		[
 			"--headless=new",
 			"--disable-gpu",
 			"--no-first-run",
@@ -76,20 +82,39 @@ export async function withChrome<T>(
 			`--remote-debugging-port=${port}`,
 			"about:blank",
 		],
-		stdout: "null",
-		stderr: "null",
-	}).spawn();
+		{ stdio: "ignore" },
+	);
+	// Node reports a missing binary as an event, not a throw: keep it for the
+	// error below, and let the teardown wait on whichever of the two comes first
+	let spawnError: Error | undefined;
+	const exited = new Promise<void>((resolve) => {
+		chrome.once("exit", () => resolve());
+		chrome.once("error", (e) => {
+			spawnError = e;
+			resolve();
+		});
+	});
 
 	try {
 		let targets: { webSocketDebuggerUrl: string; type: string }[] = [];
-		for (let i = 0; i < 100 && !targets.some((t) => t.type === "page"); i++) {
+		for (
+			let i = 0;
+			i < 100 && !spawnError && !targets.some((t) => t.type === "page");
+			i++
+		) {
 			try {
 				targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json();
 			} catch { /* not up yet */ }
 			await sleep(100);
 		}
 		const page = targets.find((t) => t.type === "page");
-		if (!page) throw new Error("Chrome did not expose a page target");
+		if (!page) {
+			throw spawnError
+				? new Error(`cannot start Chrome at ${CHROME} (set $CHROME)`, {
+					cause: spawnError,
+				})
+				: new Error("Chrome did not expose a page target");
+		}
 
 		const ws = new WebSocket(page.webSocketDebuggerUrl);
 		await new Promise((r) => (ws.onopen = r));
@@ -168,8 +193,8 @@ export async function withChrome<T>(
 		return out;
 	} finally {
 		chrome.kill("SIGKILL");
-		await chrome.status;
-		await Deno.remove(profile, { recursive: true }).catch(() => {});
+		await exited;
+		await rm(profile, { recursive: true, force: true }).catch(() => {});
 		await server.shutdown();
 	}
 }

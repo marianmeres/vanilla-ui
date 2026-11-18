@@ -6,14 +6,24 @@ vanilla-JS prototyping; published to JSR + npm.
 
 ## Quick Reference
 
-- **Stack**: Deno · TypeScript index · plain-JS components inside `.html` · browser runtime.
-- **Test**: `deno task test` (anatomy + index) · `deno task test:browser` (component behavior in
-  headless Chrome) | **Type-check**: `deno check src/ tests/ scripts/`
-- **Build**: `deno task build` (→ `dist/mod.js`, **tracked** — the file host import maps point at)
-- **Prove a change is invisible**: `deno task fingerprint` → change → `deno task fingerprint
+- **Stack**: TypeScript index (erasable-only) · plain-JS components inside `.html` · browser
+  runtime · Node LTS (`.node-version`) for tooling · pnpm · `node:test` · Biome.
+- **Install**: `pnpm install` | **Test**: `pnpm test` (anatomy + index) · `pnpm run
+  test:browser` (component behavior in headless Chrome) | **Check all**: `pnpm run ci`
+  (typecheck + lint + test)
+- **Deno suite**: `pnpm run test:deno` | **JSR dry run**: `pnpm run jsr:check`
+- **Bundle**: `pnpm run bundle` (→ `dist/mod.js`, **tracked** — vanilla inlined; the file host
+  import maps point at) | **npm build**: `pnpm run build` (→ `npm-pkg/`, gitignored; Convention 11)
+- **Prove a change is invisible**: `pnpm run fingerprint` → change → `pnpm run fingerprint
   --check` (rendered text + every bounding box; see `scripts/render-fingerprint.ts`)
-- **Gallery**: `deno task serve` → http://localhost:4507/gallery/ (the kit's living test suite)
-- **Themes**: `deno task themes:build` (→ `gallery/themes/*.css`) | **Release**: `deno task rp`
+- **Gallery**: `pnpm run serve` → http://localhost:4507/gallery/ (the kit's living test suite)
+- **Themes**: `pnpm run themes:build` (→ `gallery/themes/*.css`) | **Release + publish**:
+  `pnpm run rp` / `rpm` (human action; npm + JSR)
+- **Format / lint**: `pnpm run format` / `pnpm run lint` (Biome: tabs, 90 chars, indent 4;
+  `.html` is linted, not formatted)
+- **Registries**: npm gets `npm-pkg/` (`tsc`'s `dist/mod.js`, vanilla a bare import, plus
+  `components/` and the docs; manifest `package.json`, the version of record); JSR gets the
+  `.ts` source and the tracked bundle (manifest `jsr.json`, no version).
 
 ## Project Structure
 
@@ -21,7 +31,7 @@ vanilla-JS prototyping; published to JSR + npm.
 src/mod.ts                — typed index: re-exports vanilla, COMPONENTS_BASE, loadAll/load<Name>, types
 components/base.css       — the base layer: token vocabulary + control primitives (NOT a component)
 components/<name>.html    — ONE component per file: <template> + @scope'd <style> + inline module
-dist/mod.js               — built index (deno task build); tracked; import-map target
+dist/mod.js               — bundled index (pnpm run bundle), vanilla inlined; tracked; import-map target
 gallery/index.html        — every component, every state, every theme; import map example
 gallery/themes/           — generated design-tokens CSS + reboot bridge ("vui-"); _generate.ts
 gallery/reboot.css        — Bootstrap Reboot, vendored; the picker imports it into @layer reset
@@ -31,8 +41,13 @@ tests/browser/<name>.html — behavior test page per component, plus base.html f
 scripts/browser-test.ts   — serves the repo, drives headless Chrome (DevTools protocol), reads #result
 scripts/render-fingerprint.ts — captures what a page RENDERED (text + every box); --check diffs it
 scripts/_chrome.ts        — the headless-Chrome harness both of the above sit on
+scripts/serve.ts          — static server for the repo root (pnpm run serve)
 docs/DESIGN.md            — rationale & rules (read before adding a component)
 README.md · API.md        — human docs
+package.json              — manifest of record: version, npm exports, dev deps, scripts
+jsr.json                  — JSR manifest: exports, DOM lib, jsr: vanilla, publish.include (no version)
+tsconfig.json             — type gate (src + tests + scripts + gallery, noEmit)
+tsconfig.build.json       — src → npm-pkg/dist (ESM + .d.ts) for npm
 ```
 
 ## Critical Conventions
@@ -122,6 +137,24 @@ README.md · API.md        — human docs
    picker shows both outcomes; API.md → Base layer documents it.
 10. **One copy of vanilla.** `src/mod.ts` re-exports the base library so a host maps both bare
     specifiers to `dist/mod.js`. Don't import vanilla from anywhere but that specifier.
+11. **Two builds, two different files named `dist/mod.js`.** `pnpm run bundle` writes the
+    repo's own: esbuild (`@marianmeres/bundle`) with vanilla **inlined**, committed — the
+    import-map target of the gallery, the browser tests, a copied or served kit, jsDelivr's
+    GitHub endpoint, and JSR's file set. `pnpm run build` assembles the npm package in the
+    gitignored `npm-pkg/`: `tsc` emits `npm-pkg/dist/mod.js` with vanilla left a **bare
+    import** (DESIGN §4: a CDN host maps it to its own copy), and the files npm ships are
+    copied beside it; `publishConfig.directory` makes `pnpm pack` / `pnpm publish` take that
+    folder, and `prepack` builds it. Never point `tsc` at the root `dist/`: it would replace
+    the bundle with a module that imports itself through the import map. Whatever bundles
+    `dist/mod.js` must leave `import.meta.url` live (esbuild does; Deno's own bundler froze it
+    into a `file://` string), or `COMPONENTS_BASE` breaks in the browser.
+12. **Erasable-only TypeScript, runtime-neutral tooling.** Node runs the tests, the scripts and
+    the theme generator with types stripped, so no `enum`, `namespace` or constructor
+    parameter properties, `import type` for type-only imports, and relative imports keep
+    their `.ts` extension (`tsconfig.json` enforces it). No `Deno.*` / `Bun.*` / `jsr:` /
+    `npm:` in source, tests or scripts: the unit suite runs on Node (the gate) and on Deno
+    (`test:deno`, through `jsr.json`'s import map). Deno's `isFile` & co. are properties,
+    Node's are methods — call them.
 
 ## Adding a Component
 
@@ -139,8 +172,8 @@ README.md · API.md        — human docs
 4. Add a `<section class="component" id="<name>">` to `gallery/index.html` covering every state.
    Use `.vui-btn` / `.vui-row` for any control it needs — the gallery defines no control styles
    of its own on purpose (it must test what ships).
-5. `deno task test` (anatomy) · `deno task build` · `deno task test:browser` (behavior) ·
-   `deno task serve` and eyeball the gallery, light and dark, at least two themes.
+5. `pnpm test` (anatomy) · `pnpm run bundle` · `pnpm run test:browser` (behavior) ·
+   `pnpm run serve` and eyeball the gallery, light and dark, at least two themes.
 6. Document: README components table, API.md section (props, view, `returnValue`/events, CSS
    variables read), `mcp-include.txt` if the summary changes.
 
@@ -150,22 +183,23 @@ README.md · API.md        — human docs
 - [ ] Anything about buttons, inputs, colors or focus rings starts in `components/base.css` —
       one vocabulary, one control look, enforced by `tests/components.test.ts` (DESIGN §D9).
 - [ ] Match `components/dialog.html` and the patterns in `src/mod.ts`.
-- [ ] `deno task test`, `deno task test:browser` and `deno check src/ tests/ scripts/` pass.
-- [ ] Component **behavior** is browser-only (blob-URL import + import map): the Deno unit tests
+- [ ] `pnpm run ci` (typecheck + lint + test) and `pnpm run test:browser` pass;
+      `pnpm run test:deno` too before a release. `pnpm run format` before committing.
+- [ ] Component **behavior** is browser-only (blob-URL import + import map): the unit tests
       only lint file anatomy and the index; `test:browser` runs `tests/browser/*.html` in headless
       Chrome (`$CHROME` overrides the binary path) and the gallery is for eyes.
-- [ ] Rebuild `dist/mod.js` after touching `src/mod.ts` (it is tracked). The build task uses
-      `--esbuild` on purpose: Deno's own bundler freezes `import.meta.url` into a `file://`
-      string, which would break `COMPONENTS_BASE` in the browser.
-- [ ] A dependency published < 24 h ago trips Deno's minimum-dependency-age policy; pass
-      `--minimum-dependency-age 0` for that run rather than lowering it in `deno.json`.
-- [ ] **`deno fmt` covers the `.html` files too** — the embedded `<style>` and `<script>`
-      bodies included, which is why a component's inline module sits at column 0. The repo is
-      clean (`deno fmt --check`); keep it that way, and keep a reformat out of a feature
-      commit so it never buries the real diff.
+- [ ] Rebuild `dist/mod.js` (`pnpm run bundle`) after touching `src/mod.ts` — it is tracked
+      (Convention 11). `pnpm run release` rebuilds it too, before its commit.
+- [ ] pnpm's `minimumReleaseAge` holds back a dependency published too recently;
+      `@marianmeres/*` is exempt in `pnpm-workspace.yaml`, so a fresh own release installs.
+- [ ] **Biome formats the `.ts`, `.css`, `.json` and `.md` files, not the `.html` ones** — its
+      HTML formatter is experimental and off; it still lints the inline modules. The `.html`
+      layout (a component's inline module at column 0, the `<style>` body indented) is the one
+      `deno fmt` left, kept by hand now. Keep a reformat out of a feature commit so it never
+      buries the real diff.
 - [ ] Changing something that should look **identical** afterwards (a reformat, a selector
-      rewritten to mean the same thing, a base-layer refactor)? `deno task fingerprint`
-      before, `deno task fingerprint --check` after. The browser tests check behavior; this
+      rewritten to mean the same thing, a base-layer refactor)? `pnpm run fingerprint`
+      before, `pnpm run fingerprint --check` after. The browser tests check behavior; this
       is the one that checks layout, and it is what proved the HTML reformat was a no-op.
 
 ## Documentation Index

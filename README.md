@@ -38,11 +38,11 @@ Deferred: select / combobox — the platform has no restylable element for them 
 ## Install
 
 ```sh
-# Deno / JSR
-deno add jsr:@marianmeres/vanilla-ui
+npm install @marianmeres/vanilla-ui
+```
 
-# npm
-npx jsr add @marianmeres/vanilla-ui
+```sh
+deno add jsr:@marianmeres/vanilla-ui
 ```
 
 Or, for a prototype: **copy this repo's `components/` and `dist/` next to your page** (or
@@ -278,7 +278,7 @@ to read. Alongside them sit the structural tokens: radius and shadow in three ti
 
 - **No theme at all** → still looks right, and follows the page's `color-scheme`.
 - **A generated theme** → drop one of `gallery/themes/*.css` into the page (light on `:root`,
-  dark on `:root.dark`), or generate your own: `deno task themes:build` (see
+  dark on `:root.dark`), or generate your own: `pnpm run themes:build` (see
   [`gallery/themes/_generate.ts`](./gallery/themes/_generate.ts)).
 - **Tokens under another prefix already?** Regenerate with `"vui-"`, or set the handful of
   `--vui-*` names the kit reads (the whole vocabulary is one table in
@@ -356,15 +356,42 @@ The gallery is the kit's documentation and its visual check — every component,
 every theme:
 
 ```sh
-deno task build   # bundles src/mod.ts -> dist/mod.js (the file the import map points at)
-deno task serve   # http://localhost:4507/gallery/
+pnpm install
+pnpm run bundle   # bundles src/mod.ts -> dist/mod.js (the file the import map points at)
+pnpm run serve    # http://localhost:4507/gallery/
 ```
 
-Behavior is tested in a real browser: `deno task test:browser` serves the repo and drives
-headless Chrome through `tests/browser/*.html` (one page per component). `deno task test`
+Behavior is tested in a real browser: `pnpm run test:browser` serves the repo and drives
+headless Chrome through `tests/browser/*.html` (one page per component). `pnpm test`
 covers the index and lints every component file's anatomy — including the style rules that keep
 the kit consistent: no raw design tokens, no hard-coded colors, and no component painting a
 control the base layer owns.
+
+## Development
+
+Node LTS (`.node-version`), pnpm, Biome, `node:test`. The index is erasable-only TypeScript
+that Node runs directly in the tests. Two builds write a file named `dist/mod.js`, and they
+are different files: `pnpm run bundle` writes the repo's own, committed one (vanilla
+inlined: the file a copied or served kit, the gallery and JSR carry), and `pnpm run build`
+assembles the npm package in the gitignored `npm-pkg/` (`tsc` output, vanilla left a bare
+import), which `pnpm publish` publishes from there.
+
+| Command                             | Does                                                                 |
+| ----------------------------------- | -------------------------------------------------------------------- |
+| `pnpm install`                      | installs the dev tooling                                             |
+| `pnpm test` / `pnpm run test:watch` | `node --test` over `tests/**/*.test.ts`: the index and the anatomy   |
+| `pnpm run test:browser`             | component behavior in headless Chrome (`$CHROME` overrides the path) |
+| `pnpm run fingerprint` (`--check`)  | captures what the gallery rendered (compares against the capture)    |
+| `pnpm run test:deno`                | the unit suite on Deno, resolved as JSR consumers see it             |
+| `pnpm run typecheck`                | `tsc --noEmit` over `src`, `tests`, `scripts` and `gallery`          |
+| `pnpm run lint` / `pnpm run format` | `biome check .` read-only / with `--write`                           |
+| `pnpm run ci`                       | typecheck + lint + test, what CI runs                                |
+| `pnpm run bundle`                   | bundles `src/mod.ts` → `dist/mod.js` (committed)                     |
+| `pnpm run build`                    | `tsc` → `npm-pkg/dist/`, plus the files npm ships → `npm-pkg/`       |
+| `pnpm run serve`                    | serves the repo at http://localhost:4507/                            |
+| `pnpm run themes:build`             | regenerates `gallery/themes/*.css` from design-tokens themes         |
+| `pnpm run jsr:check`                | `deno publish --dry-run` with the `package.json` version             |
+| `pnpm run rp` / `pnpm run rpm`      | patch / minor release, then publish to npm and JSR                   |
 
 ## API
 

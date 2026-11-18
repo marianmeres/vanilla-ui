@@ -174,7 +174,7 @@ Absolute URL of the base stylesheet.
 ### `COMPONENTS_BASE`
 
 `string` — Absolute URL of the `components/` directory, resolved as `../components/` relative
-to the index module's own URL (`src/mod.ts` in Deno, `dist/mod.js` in the browser). This is
+to the index module's own URL (`src/mod.ts` run from source, `dist/mod.js` in the browser). This is
 why the kit needs no path configuration when served as a folder — or off a CDN: with
 `@marianmeres/vanilla-ui` mapped to
 `https://cdn.jsdelivr.net/npm/@marianmeres/vanilla-ui@0.4/dist/mod.js` it resolves to that

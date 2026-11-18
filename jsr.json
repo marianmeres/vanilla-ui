@@ -1,0 +1,36 @@
+{
+  "name": "@marianmeres/vanilla-ui",
+  "exports": {
+    ".": "./src/mod.ts"
+  },
+  "compilerOptions": {
+    "lib": ["deno.ns", "dom", "dom.iterable", "esnext"]
+  },
+  "imports": {
+    "@marianmeres/vanilla": "jsr:@marianmeres/vanilla@^1.10.0",
+    "linkedom": "npm:linkedom@^0.18.15"
+  },
+  "publish": {
+    "include": [
+      "src/**/*.ts",
+      "components/*.html",
+      "components/*.css",
+      "dist/mod.js",
+      "tests/**/*.ts",
+      "tests/browser/*.html",
+      "scripts/**/*.ts",
+      "gallery/index.html",
+      "gallery/reboot.css",
+      "gallery/themes/*.css",
+      "gallery/themes/_generate.ts",
+      "docs/*.md",
+      "index.html",
+      "README.md",
+      "API.md",
+      "AGENTS.md",
+      "CLAUDE.md",
+      "LICENSE",
+      ".editorconfig"
+    ]
+  }
+}

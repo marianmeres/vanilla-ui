@@ -1,0 +1,14 @@
+{
+	// `pnpm run build`: emits src/ to npm-pkg/dist/ (ESM + .d.ts). The npm package is
+	// assembled in npm-pkg/ (gitignored; `publishConfig.directory` publishes it) and not at
+	// the root, because the root's dist/mod.js is a different file: the tracked browser
+	// bundle, with vanilla inlined, that import maps, the gallery and JSR point at.
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"noEmit": false,
+		"rootDir": "src",
+		"outDir": "npm-pkg/dist",
+		"declaration": true
+	},
+	"include": ["src"]
+}

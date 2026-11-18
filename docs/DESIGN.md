@@ -112,8 +112,8 @@ Component behavior needs a real browser: `loadComponent` imports the inline scri
 every component has a page under `tests/browser/` that exercises it and reports `ok`/`FAIL`
 lines into `#result`; `scripts/browser-test.ts` serves the repo, drives headless Chrome over
 the DevTools protocol, and fails on any `FAIL`, uncaught exception, console error or timeout
-(`deno task test:browser`). The gallery mounts **every component in every state on every
-theme** for the check no script makes — does it look right. What is unit-tested in Deno: the
+(`pnpm run test:browser`). The gallery mounts **every component in every state on every
+theme** for the check no script makes — does it look right. What is unit-tested (`node:test`): the
 index (URL resolution, re-exports) and the **anatomy** of every component file (§3) on a
 parsed copy with `linkedom` — the contract everything else relies on.
 
@@ -122,7 +122,7 @@ a selector rewritten to mean the same thing, a base-layer refactor — and neith
 the browser tests can settle that, because they check behavior, not layout. So
 `scripts/render-fingerprint.ts` loads a page in headless Chrome and writes down what it
 actually rendered: the body's text, the top layer's, and every element's tag, class and
-bounding box to a tenth of a pixel. `deno task fingerprint` captures the baseline; `--check`
+bounding box to a tenth of a pixel. `pnpm run fingerprint` captures the baseline; `--check`
 compares against it and prints the boxes that moved. Geometry and text rather than
 screenshots, deliberately — no image diffing, no per-platform rendering noise, and a failure
 you can read. The baseline lands in gitignored `tmp/` because it is a before/after pair inside

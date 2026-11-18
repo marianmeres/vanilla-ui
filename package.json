@@ -1,0 +1,90 @@
+{
+  "name": "@marianmeres/vanilla-ui",
+  "version": "0.5.2",
+  "description": "Reusable UI primitives on top of @marianmeres/vanilla, shipped as single-file .html components (a <template>, a @scope'd <style> and an inline module) loaded at runtime: dialog, popover/menu/tooltip, disclosure, tabs, toast, plus a token-driven base layer. No build step, just serve.",
+  "license": "MIT",
+  "author": "Marian Meres",
+  "type": "module",
+  "packageManager": "pnpm@12.18.0",
+  "publishConfig": {
+    "access": "public",
+    "directory": "npm-pkg"
+  },
+  "main": "./dist/mod.js",
+  "types": "./dist/mod.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/mod.d.ts",
+      "import": "./dist/mod.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md",
+    "API.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "docs",
+    "components"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/marianmeres/vanilla-ui.git"
+  },
+  "bugs": {
+    "url": "https://github.com/marianmeres/vanilla-ui/issues"
+  },
+  "homepage": "https://github.com/marianmeres/vanilla-ui#readme",
+  "keywords": [
+    "ui-kit",
+    "components",
+    "single-file-components",
+    "vanilla-js",
+    "dialog",
+    "popover",
+    "menu",
+    "tabs",
+    "toast",
+    "design-tokens",
+    "css-scope",
+    "no-build"
+  ],
+  "dependencies": {
+    "@marianmeres/vanilla": "^1.10.0"
+  },
+  "scripts": {
+    "build": "pnpm run clean && tsc -p tsconfig.build.json && cp -R package.json LICENSE README.md API.md AGENTS.md CLAUDE.md docs components npm-pkg/",
+    "clean": "rm -rf npm-pkg",
+    "bundle": "bundle --outdir dist --outfile mod.js",
+    "bundle:watch": "bundle --outdir dist --outfile mod.js --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "node --test \"tests/**/*.test.ts\"",
+    "test:watch": "node --test --watch \"tests/**/*.test.ts\"",
+    "test:deno": "deno test --no-lock --config jsr.json --allow-read tests/",
+    "test:browser": "node scripts/browser-test.ts",
+    "fingerprint": "node scripts/render-fingerprint.ts",
+    "serve": "node scripts/serve.ts",
+    "themes:build": "node gallery/themes/_generate.ts",
+    "jsr:check": "deno publish --dry-run --allow-dirty --set-version \"$npm_package_version\"",
+    "ci": "pnpm run typecheck && pnpm run lint && pnpm test",
+    "prepublishOnly": "pnpm run ci",
+    "prepack": "pnpm run build",
+    "release": "npx --yes @marianmeres/release@^2.2.0 --before-commit \"pnpm run bundle\"",
+    "publish:jsr": "pnpm run test:deno && deno publish --set-version \"$npm_package_version\"",
+    "publish:all": "pnpm publish && pnpm run publish:jsr",
+    "rp": "pnpm run release -y && pnpm run publish:all",
+    "rpm": "pnpm run release minor -y && pnpm run publish:all"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.8",
+    "@marianmeres/bundle": "^1.0.0",
+    "@marianmeres/demino": "^2.1.0",
+    "@marianmeres/design-tokens": "^1.20.0",
+    "@types/node": "^26.6.6",
+    "linkedom": "^0.18.15",
+    "typescript": "^7.0.2"
+  }
+}

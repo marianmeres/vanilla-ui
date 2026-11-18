@@ -14,20 +14,22 @@
  *
  * Requires Chrome. Path from `$CHROME`, else the macOS default.
  *
- *   deno task test:browser
+ *   pnpm run test:browser
  */
+import { readdirSync } from "node:fs";
+import process from "node:process";
 import { withChrome } from "./_chrome.ts";
 
 const TIMEOUT_MS = 20_000;
 const pagesDir = new URL("../tests/browser/", import.meta.url);
 
-const pages = [...Deno.readDirSync(pagesDir)]
-	.filter((e) => e.isFile && e.name.endsWith(".html"))
+const pages = readdirSync(pagesDir, { withFileTypes: true })
+	.filter((e) => e.isFile() && e.name.endsWith(".html"))
 	.map((e) => e.name)
 	.sort();
 if (!pages.length) {
 	console.error("no tests/browser/*.html pages");
-	Deno.exit(1);
+	process.exit(1);
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -66,4 +68,4 @@ const failed = await withChrome(async ({ navigate, evaluate, problems }) => {
 	return failed;
 }, { port: 9333 });
 
-Deno.exit(failed ? 1 : 0);
+process.exit(failed ? 1 : 0);

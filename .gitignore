@@ -1,8 +1,27 @@
 node_modules/
-.idea
-.DS_Store
-.npm-dist
-tmp/*
+# `pnpm run build` assembles the npm package here (tsc output + the files npm ships);
+# `publishConfig.directory` publishes it. dist/ itself is NOT ignored: dist/mod.js is the
+# committed browser bundle (`pnpm run bundle`) that import maps and the gallery point at.
+/npm-pkg/
+*.tsbuildinfo
+
 .env
 .env.*
 !.env.example
+
+# pnpm's lockfile is the one committed; another installer must not add a second
+package-lock.json
+npm-shrinkwrap.json
+bun.lock
+bun.lockb
+yarn.lock
+deno.lock
+
+tmp/*
+!tmp/.gitkeep
+*.log
+
+.DS_Store
+.idea/
+.vscode/
+.claude/settings.local.json

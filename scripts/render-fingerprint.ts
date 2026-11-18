@@ -9,9 +9,9 @@
  * tag, class and bounding box to a tenth of a pixel — then compares two of
  * those.
  *
- *   deno task fingerprint                    # capture the baseline
+ *   pnpm run fingerprint                     # capture the baseline
  *   …change something…
- *   deno task fingerprint --check            # identical, or a diff and exit 1
+ *   pnpm run fingerprint --check             # identical, or a diff and exit 1
  *
  * The baseline lands in `tmp/` (gitignored) on purpose: it is a before/after
  * pair within one piece of work, not a committed snapshot that would need
@@ -32,7 +32,10 @@
  *
  * Requires Chrome. Path from `$CHROME`, else the macOS default.
  */
-import { dirname } from "@std/path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
 import { withChrome } from "./_chrome.ts";
 
 /** Chrome that only exists after a click — measured too, or it is not measured at all. */
@@ -42,7 +45,7 @@ const GALLERY_CLICKS = [
 ];
 const DEFAULT_OUT = new URL("../tmp/render-fingerprint.json", import.meta.url);
 
-const args = [...Deno.args];
+const args = process.argv.slice(2);
 const flag = (name: string) => {
 	const at = args.indexOf(name);
 	if (at < 0) return undefined;
@@ -57,7 +60,7 @@ const flagAll = (name: string) => {
 const check = args.includes("--check");
 const page = flag("--page");
 const clicks = flagAll("--click");
-const out = args.filter((a) => !a.startsWith("--"))[0] ?? DEFAULT_OUT.pathname;
+const out = args.filter((a) => !a.startsWith("--"))[0] ?? fileURLToPath(DEFAULT_OUT);
 
 const fingerprint = await withChrome(async ({ navigate, evaluate, problems }) => {
 	await navigate(page ?? "gallery/");
@@ -72,7 +75,7 @@ const fingerprint = await withChrome(async ({ navigate, evaluate, problems }) =>
 	}
 	if (problems.length) {
 		console.error("page errors:\n  " + problems.join("\n  "));
-		Deno.exit(1);
+		process.exit(1);
 	}
 	// `.wrap *` is the page; the top-layer boxes sit outside it, so they are
 	// named separately or they would go unmeasured
@@ -97,24 +100,24 @@ const fingerprint = await withChrome(async ({ navigate, evaluate, problems }) =>
 
 if (!check) {
 	// tmp/ is gitignored, so on a fresh clone it may not exist yet
-	await Deno.mkdir(dirname(out), { recursive: true });
-	await Deno.writeTextFile(out, fingerprint);
+	await mkdir(dirname(out), { recursive: true });
+	await writeFile(out, fingerprint);
 	const { boxes } = JSON.parse(fingerprint);
 	console.log(`captured ${boxes.length} boxes → ${out}`);
-	Deno.exit(0);
+	process.exit(0);
 }
 
 let baseline: string;
 try {
-	baseline = await Deno.readTextFile(out);
+	baseline = await readFile(out, "utf8");
 } catch {
-	console.error(`no baseline at ${out} — run \`deno task fingerprint\` first`);
-	Deno.exit(1);
+	console.error(`no baseline at ${out} — run \`pnpm run fingerprint\` first`);
+	process.exit(1);
 }
 if (baseline === fingerprint) {
 	const { boxes } = JSON.parse(fingerprint);
 	console.log(`unchanged — ${boxes.length} boxes identical to ${out}`);
-	Deno.exit(0);
+	process.exit(0);
 }
 
 // something moved: say what, rather than dumping two files at the reader
@@ -133,4 +136,4 @@ for (let i = 0; i < Math.max(was.boxes.length, now.boxes.length); i++) {
 	}
 	console.log(`  - ${was.boxes[i] ?? "(none)"}\n  + ${now.boxes[i] ?? "(none)"}`);
 }
-Deno.exit(1);
+process.exit(1);
