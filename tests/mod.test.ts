@@ -1,40 +1,42 @@
-import { assert, assertEquals, assertStringIncludes } from "@std/assert";
+import assert from "node:assert/strict";
+import { stat } from "node:fs/promises";
+import { test } from "node:test";
 import * as ui from "../src/mod.ts";
 
-Deno.test("COMPONENTS_BASE resolves to the repo's components/ directory", () => {
-	assert(ui.COMPONENTS_BASE.endsWith("/components/"));
+test("COMPONENTS_BASE resolves to the repo's components/ directory", () => {
+	assert.ok(ui.COMPONENTS_BASE.endsWith("/components/"));
 	const expected = new URL("../components/", import.meta.url).href;
-	assertEquals(ui.COMPONENTS_BASE, expected);
+	assert.deepStrictEqual(ui.COMPONENTS_BASE, expected);
 });
 
-Deno.test("componentUrl builds <base>/<name>.html", () => {
-	assertEquals(ui.componentUrl("dialog"), ui.COMPONENTS_BASE + "dialog.html");
-	assertEquals(
+test("componentUrl builds <base>/<name>.html", () => {
+	assert.deepStrictEqual(ui.componentUrl("dialog"), ui.COMPONENTS_BASE + "dialog.html");
+	assert.deepStrictEqual(
 		ui.componentUrl("dialog", "https://cdn.example/kit/components/"),
 		"https://cdn.example/kit/components/dialog.html",
 	);
 });
 
-Deno.test("every component file the index knows about exists on disk", async () => {
+test("every component file the index knows about exists on disk", async () => {
 	for (const name of ["dialog", "disclosure", "popover", "tabs", "toast"]) {
-		const stat = await Deno.stat(new URL(ui.componentUrl(name)));
-		assert(stat.isFile, `${name}.html missing`);
+		const info = await stat(new URL(ui.componentUrl(name)));
+		assert.ok(info.isFile(), `${name}.html missing`);
 	}
 });
 
-Deno.test("baseStylesUrl points at components/base.css, which exists", async () => {
-	assertEquals(ui.baseStylesUrl(), ui.COMPONENTS_BASE + "base.css");
-	assertEquals(
+test("baseStylesUrl points at components/base.css, which exists", async () => {
+	assert.deepStrictEqual(ui.baseStylesUrl(), ui.COMPONENTS_BASE + "base.css");
+	assert.deepStrictEqual(
 		ui.baseStylesUrl("https://cdn.example/kit/components/"),
 		"https://cdn.example/kit/components/base.css",
 	);
 	// every loader awaits it — a missing file would break the whole kit
-	const stat = await Deno.stat(new URL(ui.baseStylesUrl()));
-	assert(stat.isFile, "components/base.css missing");
-	assertEquals(ui.BASE_STYLES_ID, "vui-base");
+	const info = await stat(new URL(ui.baseStylesUrl()));
+	assert.ok(info.isFile(), "components/base.css missing");
+	assert.deepStrictEqual(ui.BASE_STYLES_ID, "vui-base");
 });
 
-Deno.test("the index re-exports the base library (one import map target for both)", () => {
+test("the index re-exports the base library (one import map target for both)", () => {
 	for (
 		const name of [
 			"observable",
@@ -45,7 +47,11 @@ Deno.test("the index re-exports the base library (one import map target for both
 			"mount",
 		]
 	) {
-		assertEquals(typeof (ui as Record<string, unknown>)[name], "function", name);
+		assert.deepStrictEqual(
+			typeof (ui as Record<string, unknown>)[name],
+			"function",
+			name,
+		);
 	}
-	assertStringIncludes(String(ui.MAX_UPDATE_DEPTH), "1000");
+	assert.ok(String(ui.MAX_UPDATE_DEPTH).includes("1000"));
 });
