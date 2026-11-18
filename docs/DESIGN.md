@@ -714,14 +714,14 @@ path for the `.html` files.
 
 In this order — each one mostly platform:
 
-| # | Component       | Built on                       | Notes                                                                            |
-| - | --------------- | ------------------------------ | -------------------------------------------------------------------------------- |
-| 1 | dialog          | `<dialog>`                     | ✅ shipped — `placement` makes it a drawer or a sheet, same component (D14)      |
-| 2 | popover         | Popover API (`popover="auto"`) | ✅ shipped — one component; `role: "menu"` and `role: "tooltip"` are modes (D10) |
-| 3 | disclosure      | `<details>` / `<summary>`      | ✅ shipped — `name` is the accordion, `::details-content` the motion (D11)       |
-| 4 | tabs            | roving `tabindex`, aria-tabs   | ✅ shipped — a tab is a base control; `hidden=until-found` panels (D12)          |
-| 5 | toast           | region + timers                | ✅ shipped — a rail in the top layer; append-and-remove, no diffing (D13)        |
-| — | select/combobox | listbox + popup                | **deferred** — no platform element yet, and a value model to design (D8)         |
+| #   | Component       | Built on                       | Notes                                                                            |
+| --- | --------------- | ------------------------------ | -------------------------------------------------------------------------------- |
+| 1   | dialog          | `<dialog>`                     | ✅ shipped — `placement` makes it a drawer or a sheet, same component (D14)      |
+| 2   | popover         | Popover API (`popover="auto"`) | ✅ shipped — one component; `role: "menu"` and `role: "tooltip"` are modes (D10) |
+| 3   | disclosure      | `<details>` / `<summary>`      | ✅ shipped — `name` is the accordion, `::details-content` the motion (D11)       |
+| 4   | tabs            | roving `tabindex`, aria-tabs   | ✅ shipped — a tab is a base control; `hidden=until-found` panels (D12)          |
+| 5   | toast           | region + timers                | ✅ shipped — a rail in the top layer; append-and-remove, no diffing (D13)        |
+| —   | select/combobox | listbox + popup                | **deferred** — no platform element yet, and a value model to design (D8)         |
 
 The five are shipped and nothing is queued behind them, so this is a record more than a plan.
 The deferred row is the only open question, and D8 says what would reopen it: a native

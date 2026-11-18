@@ -256,7 +256,8 @@
 	   declares `--vui-control-*` unless it means to override — a container for
 	   what is inside it, a variant for itself. */
 	.vui-btn,
-	:where([class^="vui-"], [class*=" vui-"]) :where(button, input[type="button"], input[type="submit"], input[type="reset"]) {
+	:where([class^="vui-"], [class*=" vui-"])
+		:where(button, input[type="button"], input[type="submit"], input[type="reset"]) {
 		all: unset;
 		box-sizing: border-box;
 		display: inline-flex;
@@ -276,8 +277,7 @@
 		   is the kit's number, in one themeable variable. */
 		min-height: var(--vui-control-min-height, 2.5rem);
 		padding: var(--vui-control-py, 0.45rem) var(--vui-control-px, 0.9rem);
-		border: var(--vui-border-width) solid var(--vui-control-border,
-			var(--vui-border));
+		border: var(--vui-border-width) solid var(--vui-control-border, var(--vui-border));
 		border-radius: var(--vui-radius-button);
 		background: var(--vui-control-bg, var(--vui-surface));
 		color: var(--vui-control-foreground, var(--vui-surface-foreground));
@@ -386,7 +386,24 @@
 	   No `all: unset` here on purpose: it would take the <select> arrow and the
 	   checkbox/radio glyphs with it. Paint only. */
 	.vui-input,
-	:where([class^="vui-"], [class*=" vui-"]) :where(input:is([type="text"], [type="email"], [type="password"], [type="search"], [type="url"], [type="tel"], [type="number"], [type="date"], [type="time"], [type="datetime-local"], :not([type])), select, textarea) {
+	:where([class^="vui-"], [class*=" vui-"])
+		:where(
+			input:is(
+				[type="text"],
+				[type="email"],
+				[type="password"],
+				[type="search"],
+				[type="url"],
+				[type="tel"],
+				[type="number"],
+				[type="date"],
+				[type="time"],
+				[type="datetime-local"],
+				:not([type])
+			),
+			select,
+			textarea
+		) {
 		font: inherit;
 		line-height: 1.25;
 		box-sizing: border-box;
@@ -418,7 +435,8 @@
 	   why the input block above must not `all: unset`: the glyph it would take
 	   with it is the thing being tinted here.) */
 	.vui-check,
-	:where([class^="vui-"], [class*=" vui-"]) :where(input:is([type="checkbox"], [type="radio"], [type="range"]), progress) {
+	:where([class^="vui-"], [class*=" vui-"])
+		:where(input:is([type="checkbox"], [type="radio"], [type="range"]), progress) {
 		accent-color: var(--vui-primary);
 	}
 
@@ -435,7 +453,8 @@
 	   halves; the fill is the primary role, because a switch has exactly one
 	   "on" and no variants to speak of. */
 	.vui-switch,
-	:where([class^="vui-"], [class*=" vui-"]) :where(input[type="checkbox"][role="switch"]) {
+	:where([class^="vui-"], [class*=" vui-"])
+		:where(input[type="checkbox"][role="switch"]) {
 		--_track: 2.25rem;
 		--_knob: 0.9rem;
 		--_pad: 0.15rem;
@@ -505,7 +524,8 @@
 	   items — but hover and active come from the channel like any control, so
 	   a container that lifts its controls lifts the items' hover with them. */
 	.vui-menuitem,
-	:where([class^="vui-"], [class*=" vui-"]) :is([role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]) {
+	:where([class^="vui-"], [class*=" vui-"])
+		:is([role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]) {
 		all: unset;
 		box-sizing: border-box;
 		display: flex;
@@ -685,7 +705,8 @@
 		box-shadow: inset 0 calc(-1 * var(--vui-border-width)) 0 0 var(--vui-border);
 	}
 	.vui-tablist[aria-orientation="vertical"],
-	:where([class^="vui-"], [class*=" vui-"]) :where([role="tablist"][aria-orientation="vertical"]) {
+	:where([class^="vui-"], [class*=" vui-"])
+		:where([role="tablist"][aria-orientation="vertical"]) {
 		flex-direction: column;
 		overflow-x: visible;
 		/* not a scroll container on either axis, so the rail can be a plain
@@ -755,7 +776,9 @@
 	}
 	/* vertical: the indicator moves to the rail's edge, and a tab becomes a row */
 	.vui-tablist[aria-orientation="vertical"] > :is(.vui-tab, [role="tab"]),
-	:where([class^="vui-"], [class*=" vui-"]) :where([role="tablist"][aria-orientation="vertical"]) > :is([role="tab"], .vui-tab) {
+	:where([class^="vui-"], [class*=" vui-"])
+		:where([role="tablist"][aria-orientation="vertical"])
+		> :is([role="tab"], .vui-tab) {
 		justify-content: flex-start;
 		text-align: start;
 		border-radius: var(--vui-radius) 0 0 var(--vui-radius);
@@ -863,7 +886,13 @@
 	.vui-alert--success {
 		--_tint: var(--vui-success);
 	}
-	.vui-alert:is(.vui-alert--primary, .vui-alert--accent, .vui-alert--destructive, .vui-alert--warning, .vui-alert--success) {
+	.vui-alert:is(
+		.vui-alert--primary,
+		.vui-alert--accent,
+		.vui-alert--destructive,
+		.vui-alert--warning,
+		.vui-alert--success
+	) {
 		background: color-mix(in srgb, var(--_tint) 12%, var(--vui-surface));
 		border-color: color-mix(in srgb, var(--_tint) 35%, transparent);
 	}

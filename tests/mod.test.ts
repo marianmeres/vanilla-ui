@@ -37,16 +37,14 @@ test("baseStylesUrl points at components/base.css, which exists", async () => {
 });
 
 test("the index re-exports the base library (one import map target for both)", () => {
-	for (
-		const name of [
-			"observable",
-			"computed",
-			"reactTo",
-			"createView",
-			"enhance",
-			"mount",
-		]
-	) {
+	for (const name of [
+		"observable",
+		"computed",
+		"reactTo",
+		"createView",
+		"enhance",
+		"mount",
+	]) {
 		assert.deepStrictEqual(
 			typeof (ui as Record<string, unknown>)[name],
 			"function",

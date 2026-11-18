@@ -21,8 +21,8 @@ import { fileURLToPath } from "node:url";
 import { demino } from "@marianmeres/demino";
 import { serve } from "@marianmeres/demino/node";
 
-const CHROME = process.env.CHROME ??
-	"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const CHROME =
+	process.env.CHROME ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 
 /** What a DevTools call resolves to — a result object, or nothing. */
 type CdpResult = Record<string, unknown> | undefined;
@@ -104,15 +104,17 @@ export async function withChrome<T>(
 		) {
 			try {
 				targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json();
-			} catch { /* not up yet */ }
+			} catch {
+				/* not up yet */
+			}
 			await sleep(100);
 		}
 		const page = targets.find((t) => t.type === "page");
 		if (!page) {
 			throw spawnError
 				? new Error(`cannot start Chrome at ${CHROME} (set $CHROME)`, {
-					cause: spawnError,
-				})
+						cause: spawnError,
+					})
 				: new Error("Chrome did not expose a page target");
 		}
 
@@ -130,21 +132,24 @@ export async function withChrome<T>(
 				problems.push(
 					`[exception] ${
 						msg.params.exceptionDetails.exception?.description ??
-							msg.params.exceptionDetails.text
+						msg.params.exceptionDetails.text
 					}`,
 				);
 			} else if (
-				msg.method === "Runtime.consoleAPICalled" && msg.params.type === "error"
+				msg.method === "Runtime.consoleAPICalled" &&
+				msg.params.type === "error"
 			) {
 				problems.push(
-					`[console.error] ${
-						msg.params.args.map((
-							a: { value?: unknown; description?: string },
-						) => a.value ?? a.description).join(" ")
-					}`,
+					`[console.error] ${msg.params.args
+						.map(
+							(a: { value?: unknown; description?: string }) =>
+								a.value ?? a.description,
+						)
+						.join(" ")}`,
 				);
 			} else if (
-				msg.method === "Log.entryAdded" && msg.params.entry.level === "error"
+				msg.method === "Log.entryAdded" &&
+				msg.params.entry.level === "error"
 			) {
 				problems.push(
 					`[${msg.params.entry.source}] ${msg.params.entry.text} ${
@@ -179,11 +184,11 @@ export async function withChrome<T>(
 				await send("Page.navigate", { url: new URL(path, `${origin}/`).href });
 			},
 			evaluate: async <T>(expression: string) => {
-				const res = await send("Runtime.evaluate", {
+				const res = (await send("Runtime.evaluate", {
 					expression,
 					returnByValue: true,
 					awaitPromise: true,
-				}) as { result?: { value?: unknown } } | undefined;
+				})) as { result?: { value?: unknown } } | undefined;
 				return res?.result?.value as T;
 			},
 		};

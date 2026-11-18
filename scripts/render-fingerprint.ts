@@ -62,24 +62,25 @@ const page = flag("--page");
 const clicks = flagAll("--click");
 const out = args.filter((a) => !a.startsWith("--"))[0] ?? fileURLToPath(DEFAULT_OUT);
 
-const fingerprint = await withChrome(async ({ navigate, evaluate, problems }) => {
-	await navigate(page ?? "gallery/");
-	// the kit loads its components over the network and animates on entry;
-	// well past both, and past --vui-transition, before anything is measured
-	await new Promise((r) => setTimeout(r, 3000));
-	for (const selector of clicks.length ? clicks : page ? [] : GALLERY_CLICKS) {
-		await evaluate(
-			`document.querySelector(${JSON.stringify(selector)})?.click() ?? null`,
-		);
-		await new Promise((r) => setTimeout(r, 500));
-	}
-	if (problems.length) {
-		console.error("page errors:\n  " + problems.join("\n  "));
-		process.exit(1);
-	}
-	// `.wrap *` is the page; the top-layer boxes sit outside it, so they are
-	// named separately or they would go unmeasured
-	return await evaluate<string>(`JSON.stringify({
+const fingerprint = await withChrome(
+	async ({ navigate, evaluate, problems }) => {
+		await navigate(page ?? "gallery/");
+		// the kit loads its components over the network and animates on entry;
+		// well past both, and past --vui-transition, before anything is measured
+		await new Promise((r) => setTimeout(r, 3000));
+		for (const selector of clicks.length ? clicks : page ? [] : GALLERY_CLICKS) {
+			await evaluate(
+				`document.querySelector(${JSON.stringify(selector)})?.click() ?? null`,
+			);
+			await new Promise((r) => setTimeout(r, 500));
+		}
+		if (problems.length) {
+			console.error("page errors:\n  " + problems.join("\n  "));
+			process.exit(1);
+		}
+		// `.wrap *` is the page; the top-layer boxes sit outside it, so they are
+		// named separately or they would go unmeasured
+		return await evaluate<string>(`JSON.stringify({
 		text: document.body.innerText,
 		topLayer: [...document.querySelectorAll("dialog[open], [popover]")]
 			.map((el) => el.innerText).join("\\n----\\n"),
@@ -96,7 +97,9 @@ const fingerprint = await withChrome(async ({ navigate, evaluate, problems }) =>
 				].join("|");
 			}),
 	}, null, 1)`);
-}, { port: 9466, viewport: { width: 1000, height: 1400 } });
+	},
+	{ port: 9466, viewport: { width: 1000, height: 1400 } },
+);
 
 if (!check) {
 	// tmp/ is gitignored, so on a fresh clone it may not exist yet
@@ -121,7 +124,8 @@ if (baseline === fingerprint) {
 }
 
 // something moved: say what, rather than dumping two files at the reader
-const was = JSON.parse(baseline), now = JSON.parse(fingerprint);
+const was = JSON.parse(baseline),
+	now = JSON.parse(fingerprint);
 if (was.text !== now.text) console.log("body text CHANGED");
 if (was.topLayer !== now.topLayer) console.log("top-layer text CHANGED");
 if (was.boxes.length !== now.boxes.length) {

@@ -29,8 +29,9 @@
  * @module
  */
 export * from "@marianmeres/vanilla";
-import { loadComponent } from "@marianmeres/vanilla";
+
 import type { ReadonlyObservable, ViewInstance } from "@marianmeres/vanilla";
+import { loadComponent } from "@marianmeres/vanilla";
 
 /* ============================================================================
  * Locating the components
@@ -187,7 +188,9 @@ export function button(label: string, opts: ButtonOptions = {}): HTMLButtonEleme
 		opts.variant && opts.variant !== "default" ? `vui-btn--${opts.variant}` : "",
 		opts.icon ? "vui-btn--icon" : "",
 		opts.class ?? "",
-	].filter(Boolean).join(" ");
+	]
+		.filter(Boolean)
+		.join(" ");
 	if (opts.value != null) el.value = opts.value;
 	if (opts.disabled) el.disabled = true;
 	if (opts.ariaLabel) el.setAttribute("aria-label", opts.ariaLabel);
@@ -516,12 +519,7 @@ export type ToastPosition =
  * filling it: the text keeps surface contrast on every theme, and one control
  * context serves every variant — see `docs/DESIGN.md` §D13.
  */
-export type ToastVariant =
-	| "primary"
-	| "accent"
-	| "destructive"
-	| "warning"
-	| "success";
+export type ToastVariant = "primary" | "accent" | "destructive" | "warning" | "success";
 
 /** Options of one toast — the second argument of {@link ToastView.show}. */
 export interface ToastOptions {
