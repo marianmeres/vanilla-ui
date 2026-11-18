@@ -1,4 +1,12 @@
-// https://jsr.io/@marianmeres/vanilla/1.9.0/src/vanilla.ts
+// node_modules/.pnpm/@marianmeres+vanilla@1.10.1/node_modules/@marianmeres/vanilla/dist/vanilla.js
+var __rewriteRelativeImportExtension = function(path, preserveJsx) {
+  if (typeof path === "string" && /^\.\.?\//.test(path)) {
+    return path.replace(/\.(tsx)$|((?:\.d)?)((?:\.[^./]+?)?)\.([cm]?)ts$/i, function(m, tsx, d, ext, cm) {
+      return tsx ? preserveJsx ? ".jsx" : ".js" : d && (!ext || !cm) ? m : d + ext + "." + cm.toLowerCase() + "js";
+    });
+  }
+  return path;
+};
 var MAX_UPDATE_DEPTH = 1e3;
 var Scheduler = /* @__PURE__ */ (() => {
   const queues = {
@@ -34,9 +42,7 @@ var Scheduler = /* @__PURE__ */ (() => {
       if (flushing) {
         if (++chainDepth > MAX_UPDATE_DEPTH) {
           chainDepth = 0;
-          throw new Error(
-            `vanilla: maximum update depth exceeded (${MAX_UPDATE_DEPTH}) \u2014 likely a feedback loop where an effect's set() retriggers itself (a writes b, b writes a, \u2026). Check your reactTo/computed wiring, or make the loop converge so the equality guard can stop it.`
-          );
+          throw new Error(`vanilla: maximum update depth exceeded (${MAX_UPDATE_DEPTH}) \u2014 likely a feedback loop where an effect's set() retriggers itself (a writes b, b writes a, \u2026). Check your reactTo/computed wiring, or make the loop converge so the equality guard can stop it.`);
         }
       } else {
         chainDepth = 0;
@@ -68,11 +74,10 @@ function observable(value) {
     get: () => value,
     set(v) {
       if (computing > 0) {
-        throw new Error(
-          "vanilla: cannot set() an observable from inside a computed's calc \u2014 calc must be a pure derivation of its sources (no writes / side effects). Move the write into a reactTo(...) effect."
-        );
+        throw new Error("vanilla: cannot set() an observable from inside a computed's calc \u2014 calc must be a pure derivation of its sources (no writes / side effects). Move the write into a reactTo(...) effect.");
       }
-      if (v === value) return;
+      if (v === value)
+        return;
       value = v;
       notify();
     },
@@ -81,7 +86,8 @@ function observable(value) {
     },
     subscribe(fn, { immediate = true, scheduler = "microtask" } = {}) {
       subs.set(fn, scheduler);
-      if (immediate) fn(value);
+      if (immediate)
+        fn(value);
       return () => {
         subs.delete(fn);
       };
@@ -91,7 +97,8 @@ function observable(value) {
 }
 function reactTo(sources, fn, { immediate = true, scheduler = "microtask" } = {}) {
   const unsubs = sources.map((o) => o.subscribe(fn, { immediate: false, scheduler }));
-  if (immediate) fn();
+  if (immediate)
+    fn();
   return () => unsubs.forEach((u) => u());
 }
 function computed(sources, calc, { scheduler = "microtask" } = {}) {
@@ -104,9 +111,11 @@ function computed(sources, calc, { scheduler = "microtask" } = {}) {
 }
 function fromTemplate(id) {
   const tpl = document.getElementById(id);
-  if (!tpl) throw new Error(`Template not found: #${id}`);
+  if (!tpl)
+    throw new Error(`Template not found: #${id}`);
   const first = tpl.content.firstElementChild;
-  if (!first) throw new Error(`Template #${id} has no element content`);
+  if (!first)
+    throw new Error(`Template #${id} has no element content`);
   return first.cloneNode(true);
 }
 function inScope(root, el) {
@@ -116,9 +125,11 @@ function inScope(root, el) {
 function refs(root) {
   const map = {};
   const self = root;
-  if (self.matches?.("[data-ref]")) map[self.dataset.ref] = self;
+  if (self.matches?.("[data-ref]"))
+    map[self.dataset.ref] = self;
   root.querySelectorAll("[data-ref]").forEach((el) => {
-    if (inScope(root, el)) map[el.dataset.ref] = el;
+    if (inScope(root, el))
+      map[el.dataset.ref] = el;
   });
   return map;
 }
@@ -138,7 +149,8 @@ function applyBindings(root, data) {
   targets.forEach((el) => {
     el.dataset.bind.split(";").forEach((rule) => {
       const [kind, field] = rule.split(":").map((s) => s.trim());
-      if (!kind) return;
+      if (!kind)
+        return;
       const prop = BIND_ALIAS[kind] ?? kind;
       el[prop] = data[field];
     });
@@ -170,7 +182,8 @@ function createView(mountFn) {
 }
 function enhance(target, mountFn) {
   const el = typeof target === "string" ? document.querySelector(target) : target;
-  if (!el) throw new Error(`enhance: no element matches ${JSON.stringify(target)}`);
+  if (!el)
+    throw new Error(`enhance: no element matches ${JSON.stringify(target)}`);
   const { track, dispose } = tracker();
   const api = mountFn(el, track) ?? {};
   return {
@@ -183,9 +196,7 @@ function enhance(target, mountFn) {
 }
 function delegate(root, handlers) {
   const seen = /* @__PURE__ */ new Set();
-  const collect = (scope) => scope.querySelectorAll("[data-on]").forEach(
-    (el) => el.dataset.on.split(";").forEach((r) => seen.add(r.split(":")[0].trim()))
-  );
+  const collect = (scope) => scope.querySelectorAll("[data-on]").forEach((el) => el.dataset.on.split(";").forEach((r) => seen.add(r.split(":")[0].trim())));
   if (root.matches?.("[data-on]")) {
     root.dataset.on.split(";").forEach((r) => seen.add(r.split(":")[0].trim()));
   }
@@ -195,10 +206,12 @@ function delegate(root, handlers) {
   seen.forEach((evt) => {
     const listener = (e) => {
       const el = e.target?.closest("[data-on]");
-      if (!el || !root.contains(el) || !inScope(root, el)) return;
+      if (!el || !root.contains(el) || !inScope(root, el))
+        return;
       el.dataset.on.split(";").forEach((rule) => {
         const [type, action] = rule.split(":").map((s) => s.trim());
-        if (type === evt && handlers[action]) handlers[action](e, el);
+        if (type === evt && handlers[action])
+          handlers[action](e, el);
       });
     };
     root.addEventListener(evt, listener);
@@ -209,7 +222,8 @@ function delegate(root, handlers) {
 function mount(track, slot, vf, props) {
   const view = typeof vf === "function" ? vf(props) : vf;
   track(view.destroy);
-  if (view.el) slot.appendChild(view.el);
+  if (view.el)
+    slot.appendChild(view.el);
   return view;
 }
 function adoptTemplates(doc) {
@@ -237,9 +251,7 @@ function loadTemplates(url) {
   const abs = resolveAssetUrl(url);
   let p = _templateLoads.get(abs);
   if (!p) {
-    p = fetch(abs).then((r) => r.text()).then(
-      (html) => adoptTemplates(new DOMParser().parseFromString(html, "text/html"))
-    );
+    p = fetch(abs).then((r) => r.text()).then((html) => adoptTemplates(new DOMParser().parseFromString(html, "text/html")));
     _templateLoads.set(abs, p);
   }
   return p;
@@ -255,12 +267,11 @@ function loadComponent(url) {
       adoptTemplates(doc);
       adoptStyles(doc, abs);
       const script = doc.querySelector('script[type="module"]');
-      if (!script) return {};
-      const blobUrl = URL.createObjectURL(
-        new Blob([script.textContent ?? ""], { type: "text/javascript" })
-      );
+      if (!script)
+        return {};
+      const blobUrl = URL.createObjectURL(new Blob([script.textContent ?? ""], { type: "text/javascript" }));
       try {
-        return await import(blobUrl);
+        return await import(__rewriteRelativeImportExtension(blobUrl));
       } finally {
         URL.revokeObjectURL(blobUrl);
       }
