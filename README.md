@@ -358,7 +358,7 @@ every theme:
 ```sh
 pnpm install
 pnpm run bundle   # bundles src/mod.ts -> dist/mod.js (the file the import map points at)
-pnpm run serve    # http://localhost:4507/gallery/
+pnpm run serve    # http://localhost:21400/gallery/
 ```
 
 Behavior is tested in a real browser: `pnpm run test:browser` serves the repo and drives
@@ -388,7 +388,7 @@ import), which `pnpm publish` publishes from there.
 | `pnpm run ci`                       | typecheck + lint + test, what CI runs                                |
 | `pnpm run bundle`                   | bundles `src/mod.ts` → `dist/mod.js` (committed)                     |
 | `pnpm run build`                    | `tsc` → `npm-pkg/dist/`, plus the files npm ships → `npm-pkg/`       |
-| `pnpm run serve`                    | serves the repo at http://localhost:4507/                            |
+| `pnpm run serve`                    | serves the repo at http://localhost:21400/                           |
 | `pnpm run themes:build`             | regenerates `gallery/themes/*.css` from design-tokens themes         |
 | `pnpm run jsr:check`                | `deno publish --dry-run` with the `package.json` version             |
 | `pnpm run rp` / `pnpm run rpm`      | patch / minor release, then publish to npm and JSR                   |

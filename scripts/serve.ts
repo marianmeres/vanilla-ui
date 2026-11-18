@@ -4,7 +4,7 @@
  * placed next to the kit resolve `dist/mod.js` and `components/` exactly as they do
  * from any other static host.
  *
- *   pnpm run serve          # http://localhost:4507/gallery/
+ *   pnpm run serve          # http://localhost:21400/gallery/
  *
  * `PORT` overrides the port (`PORT=0`: any free one). After touching `src/mod.ts`,
  * rebuild the bundle the pages import (`pnpm run bundle`).
@@ -16,8 +16,9 @@ import { fileURLToPath } from "node:url";
 import { demino } from "@marianmeres/demino";
 import { serve } from "@marianmeres/demino/node";
 
-// `PORT=0` asks the OS for a free one (the listen line prints it)
-const PORT = Number(process.env.PORT ?? 4507);
+// 21400: the first of the ports registered for this project (21400-21409).
+// `PORT=0` asks the OS for a free one (the listen line prints it).
+const PORT = Number(process.env.PORT ?? 21400);
 
 const app = demino("", [], {
 	// one line per request instead of the default's full Request dump

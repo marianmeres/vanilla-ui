@@ -16,7 +16,7 @@ vanilla-JS prototyping; published to JSR + npm.
   import maps point at) | **npm build**: `pnpm run build` (→ `npm-pkg/`, gitignored; Convention 11)
 - **Prove a change is invisible**: `pnpm run fingerprint` → change → `pnpm run fingerprint
   --check` (rendered text + every bounding box; see `scripts/render-fingerprint.ts`)
-- **Gallery**: `pnpm run serve` → http://localhost:4507/gallery/ (the kit's living test suite)
+- **Gallery**: `pnpm run serve` → http://localhost:21400/gallery/ (the kit's living test suite)
 - **Themes**: `pnpm run themes:build` (→ `gallery/themes/*.css`) | **Release + publish**:
   `pnpm run rp` / `rpm` (human action; npm + JSR)
 - **Format / lint**: `pnpm run format` / `pnpm run lint` (Biome: tabs, 90 chars, indent 4;

@@ -13,7 +13,7 @@
  * Requires Chrome. Path from `$CHROME`, else the macOS default.
  */
 import { spawn } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import process from "node:process";
@@ -47,7 +47,10 @@ export interface ChromeSession {
 
 /** Options for {@link withChrome}. */
 export interface ChromeOptions {
-	/** DevTools port. Distinct per tool, so two of them can run at once. */
+	/**
+	 * DevTools port. Default: whichever one the OS hands Chrome, so any number of
+	 * runs can overlap; `$CHROME_DEBUG_PORT` pins it, for debugging only.
+	 */
 	port?: number;
 	/** Fix the viewport — geometry is only comparable at a known size. */
 	viewport?: { width: number; height: number; deviceScaleFactor?: number };
@@ -63,7 +66,7 @@ export async function withChrome<T>(
 	fn: (session: ChromeSession) => Promise<T>,
 	opts: ChromeOptions = {},
 ): Promise<T> {
-	const port = opts.port ?? 9333;
+	const port = opts.port ?? Number(process.env.CHROME_DEBUG_PORT ?? 0);
 	const app = demino("", [], { logger: null });
 	app.static("/", fileURLToPath(new URL("../", import.meta.url)));
 	const server = await serve(app, { port: 0, onListen: () => {}, webSockets: false });
@@ -97,13 +100,26 @@ export async function withChrome<T>(
 
 	try {
 		let targets: { webSocketDebuggerUrl: string; type: string }[] = [];
+		// the port Chrome bound. Asked for 0, it writes the one it got to the
+		// profile's DevToolsActivePort (first line), the only way to learn it; a
+		// pinned port gets no such file, and needs none
+		let devtools = port;
 		for (
 			let i = 0;
 			i < 100 && !spawnError && !targets.some((t) => t.type === "page");
 			i++
 		) {
 			try {
-				targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json();
+				devtools ||= Number(
+					(await readFile(join(profile, "DevToolsActivePort"), "utf8")).split(
+						"\n",
+					)[0],
+				);
+				if (devtools) {
+					targets = await (
+						await fetch(`http://127.0.0.1:${devtools}/json`)
+					).json();
+				}
 			} catch {
 				/* not up yet */
 			}

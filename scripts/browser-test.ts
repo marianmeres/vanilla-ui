@@ -34,42 +34,39 @@ if (!pages.length) {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-const failed = await withChrome(
-	async ({ navigate, evaluate, problems }) => {
-		let failed = 0;
-		for (const file of pages) {
-			problems.length = 0; // errors are attributed to the page that raised them
-			await navigate(`tests/browser/${file}`);
-			let text = "";
-			const deadline = Date.now() + TIMEOUT_MS;
-			while (Date.now() < deadline) {
-				text = String(
-					(await evaluate(
-						'document.getElementById("result")?.textContent ?? ""',
-					)) ?? "",
-				);
-				if (/^(DONE|ERROR)/m.test(text)) break;
-				await sleep(50);
-			}
-			const lines = text.split("\n").filter(Boolean);
-			const fails = lines.filter((l) => /^(FAIL|ERROR)/.test(l));
-			const done = lines.includes("DONE");
-			const ok = done && !fails.length && !problems.length;
-			if (!ok) failed++;
-			console.log(
-				`${ok ? "ok" : "FAIL"}  ${file}  (${
-					lines.filter((l) => l.startsWith("ok ")).length
-				} checks)`,
+const failed = await withChrome(async ({ navigate, evaluate, problems }) => {
+	let failed = 0;
+	for (const file of pages) {
+		problems.length = 0; // errors are attributed to the page that raised them
+		await navigate(`tests/browser/${file}`);
+		let text = "";
+		const deadline = Date.now() + TIMEOUT_MS;
+		while (Date.now() < deadline) {
+			text = String(
+				(await evaluate(
+					'document.getElementById("result")?.textContent ?? ""',
+				)) ?? "",
 			);
-			if (!ok) {
-				for (const l of lines) console.log("    " + l);
-				if (!done) console.log("    (no DONE within timeout)");
-				for (const p of problems) console.log("    " + p);
-			}
+			if (/^(DONE|ERROR)/m.test(text)) break;
+			await sleep(50);
 		}
-		return failed;
-	},
-	{ port: 9333 },
-);
+		const lines = text.split("\n").filter(Boolean);
+		const fails = lines.filter((l) => /^(FAIL|ERROR)/.test(l));
+		const done = lines.includes("DONE");
+		const ok = done && !fails.length && !problems.length;
+		if (!ok) failed++;
+		console.log(
+			`${ok ? "ok" : "FAIL"}  ${file}  (${
+				lines.filter((l) => l.startsWith("ok ")).length
+			} checks)`,
+		);
+		if (!ok) {
+			for (const l of lines) console.log("    " + l);
+			if (!done) console.log("    (no DONE within timeout)");
+			for (const p of problems) console.log("    " + p);
+		}
+	}
+	return failed;
+});
 
 process.exit(failed ? 1 : 0);

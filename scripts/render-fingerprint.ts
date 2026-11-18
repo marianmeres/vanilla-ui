@@ -98,7 +98,7 @@ const fingerprint = await withChrome(
 			}),
 	}, null, 1)`);
 	},
-	{ port: 9466, viewport: { width: 1000, height: 1400 } },
+	{ viewport: { width: 1000, height: 1400 } },
 );
 
 if (!check) {
